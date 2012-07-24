@@ -212,7 +212,7 @@ window.Mask = window.Mask ||  (function(){
 
 	Tokenizer.prototype = {
 		wildcards: {
-			'id': ['%id', '(\\w+)', function(id){}],
+			'id': ['%id', '(\\w+)',['id'], function(id){}],
 			'tmp': ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
 			's':['%s', '\\s*'],
 			'n': ['%n', '\\n'],
@@ -258,7 +258,7 @@ window.Mask = window.Mask ||  (function(){
 			this.wk = [];
 
 			// regular expressions
-			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.wildcards.tokens[0] + ')(.+)$');
+			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.wildcards.tmp[0] + ')(.+)$');
 			this.splitPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '()(.+)$');
 
 			this.analysePattern();

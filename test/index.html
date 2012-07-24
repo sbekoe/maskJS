@@ -1,0 +1,43 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+
+<script type="text/javascript" src="../js/mask.js"></script>
+<script type="text/javascript">
+    var template = Mask.t(
+            '<!--defMarker/-->\n' +
+                    '<!--dynMarker/-->\n' +
+                    '<ul class="{{ top }}">\n' +
+                    '<!--item-->\n' +
+                    '\t<li class="{{itemClass}}">{{i}}: {{itemName}}</li> ' +
+                    '{{unusedMarkerWillDisappear}}' +
+                    '<!--/item-->\n' +
+                    '</ul>\n',
+            {
+                pattern:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}', '<!--%s%id%s/-->', '<!--%s%id%s-->%tmp<!--%s/%id%s-->'],
+                cache:false,
+                marker:{
+                    defMarker:"I'm not given in the data object!",
+                    dynMarker:function(){return "I'm rendered dynamically by a function!";}
+                }
+            }
+    );
+
+    console.log(template.render({
+        listClass:'ul',
+        itemClass:'li',
+        item:[
+            {itemName:'list element'},
+            {itemClass:'li extra class', itemName:'another list element'}
+        ],
+        unusedData:'???'
+    }));
+
+    console.log(template);
+</script>
+</body>
+</html>

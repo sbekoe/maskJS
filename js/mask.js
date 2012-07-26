@@ -26,10 +26,10 @@ window.Mask = window.Mask ||  (function(){
 	/**
 	 * Represents a Template
 	 * @constructor
-	 * @property {Array} tmp The compiled template
+	 * @property {Array} tokens The compiled template
 	 * @property {String} template The template source
 	 * @property {Object} options The options for this template. They extend the default options.
-	 * @property {Pattern} pattern The pattern object initialized with options.pattern. pattern.exp contains the regExp to compile this template
+	 * @property {Tokenizer} tokenizer The tokenizer object initialized with options.pattern. tokenizer.exp contains the regExp to compile this template
 	 * @property {Scope} scope The Scope represents the data closure while rendering the template.
 	 * @param {String} template
 	 * @param {Object} options
@@ -43,7 +43,7 @@ window.Mask = window.Mask ||  (function(){
 	Mask.prototype = {
 		/**
 		 * Initialize the template by
-		 *   - building the pattern expression to detect markers
+		 *   - building the tokenizer expression to detect markers
 		 *   - instantiating the data scope for rendering
 		 *   - compiling or using cache
 		 * @memberOf Mask#
@@ -51,9 +51,9 @@ window.Mask = window.Mask ||  (function(){
 		 * @this {Mask}
 		 */
 		init: function(){
-			this.pattern =  new Pattern(toArray(this.options.pattern));
+			this.tokenizer =  new Tokenizer(toArray(this.options.pattern));
 			this.scope = new Scope(defaults.marker,this.options.marker);
-			this.tmp = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
+			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
 		},
 
 		/**
@@ -65,7 +65,7 @@ window.Mask = window.Mask ||  (function(){
 			if (!isArray(data)) {
 				data = [data];
 			}
-			var tmp = arguments[1] || this.tmp,
+			var tokens = arguments[1] || this.tokens,
 				scope = this.scope,
 				res = [],
 				d, i, m, t, pos, marker;
@@ -74,17 +74,17 @@ window.Mask = window.Mask ||  (function(){
 				if(data[i]!==null && typeof data[i] !== 'undefined'){
 					scope.push(data[i]);
 					// iterate trough the markers of the current template
-					for(m in tmp.marker){if(tmp.marker.hasOwnProperty(m)){
+					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
 						d = scope.find(m);
 						t = typeof d;
 						// iterate trough the positions the current marker should be inserted at
-						for(pos in tmp.marker[m]){if(tmp.marker[m].hasOwnProperty(pos)){
-							marker = tmp.marker[m][pos];
+						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
+							marker = tokens.marker[m][pos];
 							d = marker.logic.apply({data:d},marker.params);
-							tmp[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
+							tokens[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
 					}}
-					res = res.concat(tmp);
+					res = res.concat(tokens);
 					scope.pop();
 				}
 			}
@@ -131,22 +131,22 @@ window.Mask = window.Mask ||  (function(){
 			if(!template){
 				return '';
 			}
-			var last = this.pattern.detect.lastIndex = 0,
+			var last = this.tokenizer.detect.lastIndex = 0,
 				count = 0,
-				tmp = [],
+				tokens = [],
 				logic,
 				match,
 				pattern,
 				id, pos;
-			tmp.marker = {};
-			while((match = this.pattern.detect.exec(template)) !== null){
-				pattern = this.pattern.find(match);
+			tokens.marker = {};
+			while((match = this.tokenizer.detect.exec(template)) !== null){
+				pattern = this.tokenizer.find(match);
 
 				// found opening marker
 				if(match[1]){
 					// handle marker if all previous markers are closed
 					if(count===0){
-						tmp.push(template.slice(last,match.index),'');
+						tokens.push(template.slice(last,match.index),'');
 						pos = match.index + match[0].length;
 						id = match[2];
 					}
@@ -159,22 +159,22 @@ window.Mask = window.Mask ||  (function(){
 					// if the number opened markers matches the number of closed markers
 					if(count === 1){
 						// if no markers are detected until now, create an object for them
-						if(!tmp.marker[id]){tmp.marker[id] = {};}
+						if(!tokens.marker[id]){tokens.marker[id] = {};}
 						// associate position & template with marker. nested templates are handled recursive. if the current marker has no nested template, '' is stored.
-						tmp.marker[id][tmp.length-1] = {
+						tokens.marker[id][tokens.length-1] = {
 							nested:this.compile(template.slice(pos,match.index)),
 							logic:function(id){return this.data},
 							params: pattern.params
 						};
 						// update the expression index for the next loop
-						this.pattern.detect.lastIndex = last = match.index + match[0].length;
+						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}
 					// remember one marker less is opened
 					count--;
 				}
 			}
-			tmp.push(template.slice(last));
-			return tmp.length? tmp : this.tmp;
+			tokens.push(template.slice(last));
+			return tokens.length? tokens : this.tokens;
 		}
 	};
 
@@ -202,17 +202,17 @@ window.Mask = window.Mask ||  (function(){
 	};
 
 	/**
-	 * Create new Pattern
+	 * Create new Tokenizer
 	 * Used to build the regexp to detect the markers of a template
 	 * @constructor
 	 */
-	function Pattern(items){
+	function Tokenizer(items){
 		this.init(items);
 	}
 
-	Pattern.prototype = {
+	Tokenizer.prototype = {
 		wildcards: {
-			'id': ['%id', '(\\w+)', function(id){}],
+			'id': ['%id', '(\\w+)',['id'], function(id){}],
 			'tmp': ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
 			's':['%s', '\\s*'],
 			'n': ['%n', '\\n'],
@@ -327,36 +327,3 @@ window.Mask = window.Mask ||  (function(){
 	var extend = Mask.extend = function(obj){function F(){} F.prototype = obj; var o = new F(); for(var i = 1; i<arguments.length; i++){ for(var a in arguments[i]){if(arguments[i].hasOwnProperty(a)){ o[a] = arguments[i][a];}}} return o;};
 	return Mask;
 })();
-
-/* Example:
-var tmp = Mask.t(
-	'<!--defMarker/-->\n' +
-	'<!--dynMarker/-->\n' +
-	'<ul class="{{ top }}">\n' +
-		'<!--item-->\n' +
-		'\t<li class="{{itemClass}}">{{i}}: {{itemName}} - the {{i}} is rendered twice</li> ' +
-		'{{unusedMarkerWillDisappear}}' +
-		'<!--/item-->\n' +
-	'</ul>\n',
-	{
-		pattern:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}', '<!--%s%id%s/-->', '<!--%s%id%s-->%tmp<!--%s/%id%s-->'],
-		cache:false,
-		marker:{
-			defMarker:"I'm not given in the data object!",
-			dynMarker:function(){return "I'm rendered dynamically by a function!";}
-		}
-	}
-);
-
-console.log(tmp.render({
-	listClass:'ul',
-	itemClass:'li',
-	item:[
-		{itemName:'list element'},
-		{itemClass:'li extra class', itemName:'another list element'}
-	],
-	unusedData:'???'
-}));
-console.log(tmp);
-
-//*/

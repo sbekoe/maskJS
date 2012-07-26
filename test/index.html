@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>maksJs Unit Test</title>
+	<link rel="stylesheet" href="vendor/qunit-1.9.0.css">
+</head>
+<body>
+
+<!--Template-->
+<div class="test"><textarea name="template" cols="30" rows="10">
+<!--defMarker/-->
+<!--dynMarker/-->
+<ul class="{{ top }}">
+  <!--item-->
+  <li class="{{itemClass}}">{{i}}: {{itemName}} - the {{i}} is rendered twice</li>
+  {{unusedMarkerWillDisappear}}
+  <!--/item-->
+</ul></textarea>
+
+<!--Options-->
+<textarea name="options" cols="30" rows="10">
+{}
+</textarea>
+
+<!--Result-->
+<textarea name="result" cols="30" rows="10">
+			I'm not given in the data object!
+			I'm rendered dynamically by a function!
+			<ul class="">
+				<li class="li">0: list element - the 0 is rendered twice</li>
+				<li class="li extra class">1: another list element - the 1 is rendered twice</li>
+			</ul>
+		</textarea>
+	</div>
+
+
+
+
+
+	<div id="qunit"></div>
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script src="vendor/qunit-1.9.0.js"></script>
+	<script src="../js/mask.js"></script>
+	<script src="test.js"></script>
+</body>
+</html>

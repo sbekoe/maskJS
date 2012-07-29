@@ -213,8 +213,10 @@ window.Mask = window.Mask ||  (function(){
 	Tokenizer.prototype = {
 		wildcards: {
 			'id': ['%id', '(\\w+)',['id'], function(id){}],
-			'tmp': ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
-			's':['%s', '\\s*'],
+			//'tmp': ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
+			's':['%s', '[ \\t]*'],
+			'ls':['%ls', '(?:^ *)?'],
+			'le':['%le', '(?:\\s*$)?'],
 			'n': ['%n', '\\n'],
 			'if':['%if','if\\((\\w+)(==|<|>|<=|>=)(\\w+)\\)',function(id, rel, comp){}]
 		},
@@ -256,9 +258,15 @@ window.Mask = window.Mask ||  (function(){
 			this.closer = [];
 			this.divider = [];
 			this.wk = [];
+            this.nested = '%tmp'
+            this.analyseWildcards();
 
 			// regular expressions
-			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.wildcards.tmp[0] + ')(.+)$');
+			// TODO: replace this.wildcards.id[0] in the splitPattern expressions through an expression with matching any wildcards
+			// TODO: change the pattern syntax from string containing regexp wildcards to regexp containing opener- & closer wildcards
+			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.nested + ')(.+)$');
+            //this.splitNestedPattern = new RegExp('^(.+)(?!' + this.wk.join('|') + ')(?:' + this.wk.join('|') + ')+(?:(.*)' + this.nested + ')(.+)$');
+           // this.splitNestedPattern = new RegExp('^(.+)(?=(?:' + this.wk.join('|') + ')+)(?:(.*)' + this.nested + ')(.+)$');
 			this.splitPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '()(.+)$');
 
 			this.analysePattern();
@@ -272,7 +280,7 @@ window.Mask = window.Mask ||  (function(){
 			for(w in this.wildcards){if(this.wildcards.hasOwnProperty(w)){
 				exp = exp.replace(new RegExp(this.wildcards[w][0],'g'), this.wildcards[w][1]);
 			}}
-			this.detect = RegExp(exp, 'g');
+			this.detect = RegExp(exp, 'gm');
 		},
 
 		// split pattern into opener, divider & closer

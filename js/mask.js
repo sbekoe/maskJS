@@ -5,7 +5,6 @@
  * @version $Id$
  */
 
-
 window.Mask = window.Mask ||  (function(){
 	"use strict";
 	// default options
@@ -72,20 +71,21 @@ window.Mask = window.Mask ||  (function(){
 			// iterate trough data
 			for(i = 0; i<data.length;i++){
 				if(data[i]!==null && typeof data[i] !== 'undefined'){
-					scope.push(data[i]);
+					this.scope.push(data[i]);
 					// iterate trough the markers of the current template
 					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
-						d = scope.find(m);
+						//d = this.scope.find(m);
 						t = typeof d;
 						// iterate trough the positions the current marker should be inserted at
 						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
 							marker = tokens.marker[m][pos];
-							d = marker.logic.apply({data:d},marker.params);
+							d = marker.logic.apply(this, marker.params);
+							t = typeof d;
 							tokens[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
 					}}
 					res = res.concat(tokens);
-					scope.pop();
+					this.scope.pop();
 				}
 			}
 			return res.join('');
@@ -136,11 +136,11 @@ window.Mask = window.Mask ||  (function(){
 				tokens = [],
 				logic,
 				match,
-				pattern,
+				logic,
 				id, pos;
 			tokens.marker = {};
 			while((match = this.tokenizer.detect.exec(template)) !== null){
-				pattern = this.tokenizer.find(match);
+
 
 				// found opening marker
 				if(match[1]){
@@ -148,14 +148,16 @@ window.Mask = window.Mask ||  (function(){
 					if(count===0){
 						tokens.push(template.slice(last,match.index),'');
 						pos = match.index + match[0].length;
-						id = match[2];
+						logic = this.tokenizer.getLogic(match);
+						//id = match[2];
+						id = logic.id;
 					}
 					// remember: one more marker is opened
 					count++;
 				}
 
 				// found closing marker TODO: check if the closing marker belongs to the opening marker
-				if(match[3]){
+				if(match[match.length-1]){
 					// if the number opened markers matches the number of closed markers
 					if(count === 1){
 						// if no markers are detected until now, create an object for them
@@ -163,8 +165,8 @@ window.Mask = window.Mask ||  (function(){
 						// associate position & template with marker. nested templates are handled recursive. if the current marker has no nested template, '' is stored.
 						tokens.marker[id][tokens.length-1] = {
 							nested:this.compile(template.slice(pos,match.index)),
-							logic:function(id){return this.data},
-							params: pattern.params
+							logic: logic.handler,
+							params: logic.params
 						};
 						// update the expression index for the next loop
 						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
@@ -196,9 +198,13 @@ window.Mask = window.Mask ||  (function(){
 		length:0,
 		push: Array.prototype.push,
 		pop: Array.prototype.pop,
-		find: function(marker){ for(var i = this.length-1; i+1; i--){
-			if(typeof this[i][marker] !== 'undefined'){
-				return this[i][marker];}} }
+		find: function(marker){
+			for(var i = this.length-1; i+1; i--){
+				if(typeof this[i][marker] !== 'undefined'){
+					return this[i][marker];
+				}
+			}
+		}
 	};
 
 	/**
@@ -211,15 +217,30 @@ window.Mask = window.Mask ||  (function(){
 	}
 
 	Tokenizer.prototype = {
-		wildcards: {
-			'id': ['%id', '(\\w+)',['id'], function(id){}],
-			//'tmp': ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
-			's':['%s', '[ \\t]*'],
-			'ls':['%ls', '(?:^ *)?'],
-			'le':['%le', '(?:\\s*$)?'],
-			'n': ['%n', '\\n'],
-			'if':['%if','if\\((\\w+)(==|<|>|<=|>=)(\\w+)\\)',function(id, rel, comp){}]
-		},
+		wildcards: [// rename to patternSubstitution
+			['%w', '\\w+'],
+			['%s', '[ \\t]*'],
+			['%ls', '(?:^ *)?'],
+			['%le', '(?:\\s*$)?'],
+			['%n', '\\n']
+		],
+		logic:[
+			{exp: '(\\w+)(==|<|>|<=|>=)(\\w+)\\?(\\w+)', handler:function(comp1, rel, comp2, id){
+				var v0 = this.scope.find(id) || id,
+					v1 = this.scope.find(comp1) || comp1,
+					v2 = this.scope.find(comp2) || comp2;
+				switch(rel){
+					case '==': return v1 == v2? v0 : '';
+					case '<': return v1 < v2? v0 : '';
+					case '>': return v1 > v2? v0 : '';
+					case '<=': return v1 <= v2? v0 : '';
+					case '>=': return v1 >= v2? v0 : '';
+					default: return '';
+				}
+			}},
+			{exp: '(\\w+)', handler:function(id){ return this.scope.find(id); }}
+			//{exp: , handler:},
+		],
 		presets: {
 			default:{
 				items:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}'],
@@ -245,7 +266,7 @@ window.Mask = window.Mask ||  (function(){
 
 		/** @constructs */
 		init: function(items){
-			var items = items || 'default';
+			items = items || 'default';
 			if(this.presets[items]){
 				this.exp = this.presets[items].exp;
 				this.items = this.presets[items].items;
@@ -253,21 +274,18 @@ window.Mask = window.Mask ||  (function(){
 			}
 			this.items = items;
 
-			//sub pattern
 			this.opener = [];
 			this.closer = [];
 			this.divider = [];
-			this.wk = [];
-            this.nested = '%tmp'
-            this.analyseWildcards();
+			this.marker = {
+				logic: '%logic',
+				nested: '%tmp'
+			};
+			this.analyseSubstitutions();
 
 			// regular expressions
-			// TODO: replace this.wildcards.id[0] in the splitPattern expressions through an expression with matching any wildcards
-			// TODO: change the pattern syntax from string containing regexp wildcards to regexp containing opener- & closer wildcards
-			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.nested + ')(.+)$');
-            //this.splitNestedPattern = new RegExp('^(.+)(?!' + this.wk.join('|') + ')(?:' + this.wk.join('|') + ')+(?:(.*)' + this.nested + ')(.+)$');
-           // this.splitNestedPattern = new RegExp('^(.+)(?=(?:' + this.wk.join('|') + ')+)(?:(.*)' + this.nested + ')(.+)$');
-			this.splitPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '()(.+)$');
+			this.splitNestedPattern = new RegExp('^(.+)' + this.marker.logic + '(?:(.*)' + this.marker.nested + ')(.+)$');
+			this.splitPattern = new RegExp('^(.+)' + this.marker.logic + '()(.+)$');
 
 			this.analysePattern();
 			this.build();
@@ -275,11 +293,11 @@ window.Mask = window.Mask ||  (function(){
 
 		// concatenate the sub pattern to a regex & substitute wildcards
 		build: function(){
-			var exp = ('(' + this.opener.join('|') + ')(\\w+)(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
-				w;
-			for(w in this.wildcards){if(this.wildcards.hasOwnProperty(w)){
-				exp = exp.replace(new RegExp(this.wildcards[w][0],'g'), this.wildcards[w][1]);
-			}}
+			var exp = ('(' + this.opener.join('|') + ')(?:' + this.logic.exp + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
+				i;
+			for(i=0;i<this.wildcards.length;i++){
+				exp = exp.replace(new RegExp(this.wildcards[i][0],'g'), this.wildcards[i][1]);
+			}
 			this.detect = RegExp(exp, 'gm');
 		},
 
@@ -297,22 +315,36 @@ window.Mask = window.Mask ||  (function(){
 			}
 		},
 
-		analyseWildcards:function(){
-			var w;
-			for(w in this.wildcards){if(this.wildcards.hasOwnProperty(w)){
-				this.wk.push(this.wildcards[w][0]);
-			}}
+		analyseSubstitutions:function(){
+			var i, pos = 0, f, list = [];
+			this.logic.pos = {};
+
+			for(i=0; i< this.logic.length; i++){
+				this.logic.pos[pos] = i;
+				list.push(this.logic[i].exp);
+				pos += this.logic[i].handler.length;
+				f = this.logic[i].handler.toString();
+				this.logic[i].params = f.substring(f.indexOf('(')+1, f.indexOf(')')).split(/\W+/);
+			}
+			this.logic.exp = list.join('|');
 		},
 		/**
 		 * prepare a match
 		 * @param match
 		 * @return {Object}
 		 */
-		find: function(match){
-			// architecture
-			return {
-				params: []
-			};
+		getLogic: function(match){
+			var m = match.slice(2,-1),
+				l, h, p, i;
+			for(var i=0; i<m.length; i++){
+				if(typeof m[i] !== 'undefined'){
+					l = this.logic[this.logic.pos[i]];
+					h = l.handler;
+					p = m.slice(i, i + h.length);
+					i = p[l.params.lastIndexOf('id')];
+					return {handler:h, params:p, id:i};
+				}
+			}
 		},
 
 		// escape regexp chars //TODO: test if the escaping of  "-" is correct

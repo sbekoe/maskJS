@@ -172,7 +172,7 @@ window.Mask = window.Mask ||  (function(){
 						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}
 					// remember one marker less is opened
-					count--;
+					if(count>0){count--};
 				}
 			}
 			tokens.push(template.slice(last));
@@ -225,16 +225,18 @@ window.Mask = window.Mask ||  (function(){
 			['%n', '\\n']
 		],
 		logic:[
-			{exp: '(\\w+)(==|<|>|<=|>=)(\\w+)\\?(\\w+)', handler:function(comp1, rel, comp2, id){
+			{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
 				var v0 = this.scope.find(id) || id,
 					v1 = this.scope.find(comp1) || comp1,
-					v2 = this.scope.find(comp2) || comp2;
+					v2 = this.scope.find(comp2) || comp2,
+					v4 = this.scope.find(els) || els;
 				switch(rel){
-					case '==': return v1 == v2? v0 : '';
-					case '<': return v1 < v2? v0 : '';
-					case '>': return v1 > v2? v0 : '';
-					case '<=': return v1 <= v2? v0 : '';
-					case '>=': return v1 >= v2? v0 : '';
+					case '==': return v1 == v2? v0 : v4;
+					case '!=': return v1 != v2? v0 : v4;
+					case '<': return v1 < v2? v0 : v4;
+					case '>': return v1 > v2? v0 : v4;
+					case '<=': return v1 <= v2? v0 : v4;
+					case '>=': return v1 >= v2? v0 : v4;
 					default: return '';
 				}
 			}},
@@ -281,12 +283,12 @@ window.Mask = window.Mask ||  (function(){
 				logic: '%logic',
 				nested: '%tmp'
 			};
-			this.analyseSubstitutions();
-
 			// regular expressions
 			this.splitNestedPattern = new RegExp('^(.+)' + this.marker.logic + '(?:(.*)' + this.marker.nested + ')(.+)$');
+
 			this.splitPattern = new RegExp('^(.+)' + this.marker.logic + '()(.+)$');
 
+			this.analyseSubstitutions();
 			this.analysePattern();
 			this.build();
 		},

@@ -4,12 +4,15 @@
         $('.test textarea').keyup(updateCurrentTest);
 
 		//change mode
-		$('.test .mode').keyup(function(){
-			var editor = $(this).siblings('textarea').data('codemirror'),
+		$('#mode').keyup(function(){
+			var editorT = $('.test [name="template"]').data('codemirror'),
+				editorR = $('.test [name="result"]').data('codemirror'),
 				mode = $(this).val();
-			editor.setOption("mode", mode);
-			CodeMirror.autoLoadMode(editor, mode);
-
+			editorT.setOption("mode", mode);
+			CodeMirror.autoLoadMode(editorT, mode);
+			editorR.setOption("mode", mode);
+			CodeMirror.autoLoadMode(editorR, mode);
+			updateCurrentTest();
 		});
     });
 
@@ -19,79 +22,78 @@
 
 	jQuery.getJSON('tests.json',{},init);
 
-    function parseOptions(json){
-        var options = {};
-        try{
-            options = eval('('+json+')');
-        }
-        catch(e){
-            console.log('Error while parsing Options: ' + json + ' is no valid object!');
-        }
-        return options;
-    }
-
-    function updateCurrentTest(){
-        var t = {
-			name:"test",
+	function getCurrentTest(){
+		return {
+			name:$('#name').val(),
 			template: $('[name="template"]').data('codemirror').getValue(),
 			result: $('[name="result"]').data('codemirror').getValue(),
-			//data: parseOptions($('[name="data"]').data('codemirror').getValue()),
-			//options: parseOptions($('[name="options"]').data('codemirror').getValue())
 			data: $('[name="data"]').data('codemirror').getValue(),
 			options: $('[name="options"]').data('codemirror').getValue(),
-			mode: $('[name="template"]').siblings('.mode').val()
+			mode: $('#mode').val()
 		};
-		//$('.unitTest').text( JSON.stringify(t) );
-		CodeMirror.runMode(JSON.stringify(t), {name:'javascript',json:true},$('.unitTest')[0]);
-		//runTest(t);
+	}
+
+    function updateCurrentTest(){
+		CodeMirror.runMode(JSON.stringify(getCurrentTest()), {name:'javascript',json:true},$('.unitTest')[0]);
     }
 
-    function init(tests){
-        var t,i,
-			codeMirrorOptions = {
-				lineNumbers:true,
-				onKeyEvent: function(editor,event){
-					if(event.type=='keyup'){updateCurrentTest();}
-				}
-			};
+	function init(tests){
+		$('[name="template"],[name="result"],[name="options"],[name="data"]').codemirror({
+			lineNumbers:true,
+			onKeyEvent: function(editor,event){
+				if(event.type=='keyup'){updateCurrentTest();}
+			}
+		});
+		if(tests.length){
+			load(tests[tests.length-1]);
+		}
+		for(var i=0;i<tests.length;i++){
+			$('#tests').append('<option'+ (i==tests.length-1? ' selected="selected"' : '') +'>' + tests[i].name + '</option>');
+		}
 
-        if(tests.length){
-            t = tests[tests.length-1]; //show last unit test
-            $('[name="template"]')
-				.val(t.template)
-				.codemirror(codeMirrorOptions)
-				.siblings('.mode')
-					.val(t.mode)
-					.trigger('keyup');
-            $('[name="result"]')
-				.val(t.result)
-				.codemirror(codeMirrorOptions)
-				.siblings('.mode')
-					.val(t.mode)
-					.trigger('keyup');
-            $('[name="options"]')
-				.val((t.options))
-				.codemirror(codeMirrorOptions);
-			$('[name="data"]')
-				.val((t.data))
-				.codemirror(codeMirrorOptions);
-        }
+		$('#tests').change(function(){
+			for(var i=0;i<tests.length;i++){
+				if(tests[i].name===this.value) {load(tests[i])};
+			}
+		}).trigger('change');
 
-		test( "full test", function() {
-			for(i=0; i<tests.length; i++){
+		test( "loaded tests", function() {
+			for(var i=0; i<tests.length; i++){
 				runTest(tests[i]);
 			}
 		});
+		/*
+		asyncTest('current test',1,function(){
+			$('#run').click(function(){
+				ok(true,'test');
+				//console.log(getCurrentTest());
+				//runTest(getCurrentTest());
+				start();
+			});
+		});
+		//*/
+		$('#log').click(function(){ runTest(getCurrentTest(),true); });
+	}
 
-
-
+    function load(test){
+		$('[name="template"],[name="result"],[name="options"],[name="data"]').each(function(){
+			$(this).data('codemirror').setValue(test[$(this).attr('name')]);
+		});
+		$('#mode').val(test.mode).trigger('keyup');
+		$('#name').val(test.name);
         updateCurrentTest();
     }
 
-	function runTest(test){
+
+	function runTest(test,log){
 		var mask = Mask.t(test.template,evl(test.options)),
 			out = mask.render(evl(test.data));
-		console.log(mtest=mask);
+		if(log){
+			console.log('### log current unit test ###');
+			console.log(lmask = mask);
+			console.log(ltokenizer = mask.tokenizer);
+			console.log(lresult = out);
+		}
 		equal(out,test.result,test.name);
 	}
 

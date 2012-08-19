@@ -1,9 +1,9 @@
 /**
  * mask.js
+ * @fileOverview fileDescription
  * @author Simon Bekoe
- * @version 0.1
+ * @version $Id$
  */
-
 
 window.Mask = window.Mask ||  (function(){
 	"use strict";
@@ -25,10 +25,10 @@ window.Mask = window.Mask ||  (function(){
 	/**
 	 * Represents a Template
 	 * @constructor
-	 * @property {Array} tmp The compiled template
+	 * @property {Array} tokens The compiled template
 	 * @property {String} template The template source
 	 * @property {Object} options The options for this template. They extend the default options.
-	 * @property {Pattern} pattern The pattern object initialized with options.pattern. pattern.exp contains the regExp to compile this template
+	 * @property {Tokenizer} tokenizer The tokenizer object initialized with options.pattern. tokenizer.exp contains the regExp to compile this template
 	 * @property {Scope} scope The Scope represents the data closure while rendering the template.
 	 * @param {String} template
 	 * @param {Object} options
@@ -42,7 +42,7 @@ window.Mask = window.Mask ||  (function(){
 	Mask.prototype = {
 		/**
 		 * Initialize the template by
-		 *   - building the pattern expression to detect markers
+		 *   - building the tokenizer expression to detect markers
 		 *   - instantiating the data scope for rendering
 		 *   - compiling or using cache
 		 * @memberOf Mask#
@@ -50,9 +50,9 @@ window.Mask = window.Mask ||  (function(){
 		 * @this {Mask}
 		 */
 		init: function(){
-			this.pattern =  new Pattern(toArray(this.options.pattern));
+			this.tokenizer =  new Tokenizer(toArray(this.options.pattern));
 			this.scope = new Scope(defaults.marker,this.options.marker);
-			this.tmp = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
+			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
 		},
 
 		/**
@@ -64,25 +64,28 @@ window.Mask = window.Mask ||  (function(){
 			if (!isArray(data)) {
 				data = [data];
 			}
-			var tmp = arguments[1] || this.tmp,
+			var tokens = arguments[1] || this.tokens,
 				scope = this.scope,
 				res = [],
-				marker, i, m, t, p;
+				d, i, m, t, pos, marker;
 			// iterate trough data
 			for(i = 0; i<data.length;i++){
 				if(data[i]!==null && typeof data[i] !== 'undefined'){
-					scope.push(data[i]);
-					// iterate trough xxx
-					for(m in tmp.marker){if(tmp.marker.hasOwnProperty(m)){
-						marker = scope.find(m);
-						t = typeof marker;
-						// iterate trough xxx
-						for(p in tmp.marker[m]){if(tmp.marker[m].hasOwnProperty(p)){
-							tmp[p] = t === 'object'? this.render(marker,tmp.marker[m][p]) : t==='function'? marker(i,m) : marker;
+					this.scope.push(data[i]);
+					// iterate trough the markers of the current template
+					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
+						//d = this.scope.find(m);
+						t = typeof d;
+						// iterate trough the positions the current marker should be inserted at
+						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
+							marker = tokens.marker[m][pos];
+							d = marker.logic.apply(this, marker.params);
+							t = typeof d;
+							tokens[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
 					}}
-					res = res.concat(tmp);
-					scope.pop();
+					res = res.concat(tokens);
+					this.scope.pop();
 				}
 			}
 			return res.join('');
@@ -128,41 +131,52 @@ window.Mask = window.Mask ||  (function(){
 			if(!template){
 				return '';
 			}
-			var last = this.pattern.exp.lastIndex = 0,
+			var last = this.tokenizer.detect.lastIndex = 0,
 				count = 0,
-				tmp = [],
-				match, id, pos;
-			tmp.marker = {};
-			while((match = this.pattern.exp.exec(template)) !== null){
+				tokens = [],
+				logic,
+				match,
+				logic,
+				id, pos;
+			tokens.marker = {};
+			while((match = this.tokenizer.detect.exec(template)) !== null){
+
+
 				// found opening marker
 				if(match[1]){
 					// handle marker if all previous markers are closed
 					if(count===0){
-						tmp.push(template.slice(last,match.index),'');
+						tokens.push(template.slice(last,match.index),'');
 						pos = match.index + match[0].length;
-						id = match[2];
+						logic = this.tokenizer.getLogic(match);
+						//id = match[2];
+						id = logic.id;
 					}
 					// remember: one more marker is opened
 					count++;
 				}
 
 				// found closing marker TODO: check if the closing marker belongs to the opening marker
-				if(match[3]){
+				if(match[match.length-1]){
 					// if the number opened markers matches the number of closed markers
 					if(count === 1){
 						// if no markers are detected until now, create an object for them
-						if(!tmp.marker[id]){tmp.marker[id] = {};}
+						if(!tokens.marker[id]){tokens.marker[id] = {};}
 						// associate position & template with marker. nested templates are handled recursive. if the current marker has no nested template, '' is stored.
-						tmp.marker[id][tmp.length-1] = this.compile(template.slice(pos,match.index));
+						tokens.marker[id][tokens.length-1] = {
+							nested:this.compile(template.slice(pos,match.index)),
+							logic: logic.handler,
+							params: logic.params
+						};
 						// update the expression index for the next loop
-						this.pattern.exp.lastIndex = last = match.index + match[0].length;
+						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}
 					// remember one marker less is opened
-					count--;
+					if(count>0){count--};
 				}
 			}
-			tmp.push(template.slice(last));
-			return tmp.length? tmp : this.tmp;
+			tokens.push(template.slice(last));
+			return tokens.length? tokens : this.tokens;
 		}
 	};
 
@@ -184,27 +198,51 @@ window.Mask = window.Mask ||  (function(){
 		length:0,
 		push: Array.prototype.push,
 		pop: Array.prototype.pop,
-		find: function(marker){ for(var i = this.length-1; i+1; i--){
-			if(typeof this[i][marker] !== 'undefined'){
-				return this[i][marker];}} }
+		find: function(marker){
+			for(var i = this.length-1; i+1; i--){
+				if(typeof this[i][marker] !== 'undefined'){
+					return this[i][marker];
+				}
+			}
+		}
 	};
 
 	/**
-	 * Create new Pattern
+	 * Create new Tokenizer
 	 * Used to build the regexp to detect the markers of a template
 	 * @constructor
 	 */
-	function Pattern(items){
+	function Tokenizer(items){
 		this.init(items);
 	}
 
-	Pattern.prototype = {
-		wildcards: {
-			id: ['%id', '(\\w+)'],	//Do not edit these wildcard. They are used internally.
-			tmp: ['%tmp', ''],		// Do not edit these wildcard. They are used internally.
-			s:['%s', '\\s*'],
-			n: ['%n', '\\n']
-		},
+	Tokenizer.prototype = {
+		wildcards: [// rename to patternSubstitution
+			['%w', '\\w+'],
+			['%s', '[ \\t]*'],
+			['%ls', '(?:^ *)?'],
+			['%le', '(?:\\s*$)?'],
+			['%n', '\\n']
+		],
+		logic:[
+			{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
+				var v0 = this.scope.find(id) || id,
+					v1 = this.scope.find(comp1) || comp1,
+					v2 = this.scope.find(comp2) || comp2,
+					v4 = this.scope.find(els) || els;
+				switch(rel){
+					case '==': return v1 == v2? v0 : v4;
+					case '!=': return v1 != v2? v0 : v4;
+					case '<': return v1 < v2? v0 : v4;
+					case '>': return v1 > v2? v0 : v4;
+					case '<=': return v1 <= v2? v0 : v4;
+					case '>=': return v1 >= v2? v0 : v4;
+					default: return '';
+				}
+			}},
+			{exp: '(\\w+)', handler:function(id){ return this.scope.find(id); }}
+			//{exp: , handler:},
+		],
 		presets: {
 			default:{
 				items:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}'],
@@ -230,7 +268,7 @@ window.Mask = window.Mask ||  (function(){
 
 		/** @constructs */
 		init: function(items){
-			var items = items || 'default';
+			items = items || 'default';
 			if(this.presets[items]){
 				this.exp = this.presets[items].exp;
 				this.items = this.presets[items].items;
@@ -238,27 +276,31 @@ window.Mask = window.Mask ||  (function(){
 			}
 			this.items = items;
 
-			//sub pattern
 			this.opener = [];
 			this.closer = [];
 			this.divider = [];
-
+			this.marker = {
+				logic: '%logic',
+				nested: '%tmp'
+			};
 			// regular expressions
-			this.splitNestedPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '(?:(.*)' + this.wildcards.tmp[0] + ')(.+)$');
-			this.splitPattern = new RegExp('^(.+)' + this.wildcards.id[0] + '()(.+)$');
+			this.splitNestedPattern = new RegExp('^(.+)' + this.marker.logic + '(?:(.*)' + this.marker.nested + ')(.+)$');
 
+			this.splitPattern = new RegExp('^(.+)' + this.marker.logic + '()(.+)$');
+
+			this.analyseSubstitutions();
 			this.analysePattern();
 			this.build();
 		},
 
 		// concatenate the sub pattern to a regex & substitute wildcards
 		build: function(){
-			var exp = ('(' + this.opener.join('|') + ')(\\w+)(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
-				w;
-			for(w in this.wildcards){if(this.wildcards.hasOwnProperty(w)){
-				exp = exp.replace(new RegExp(this.wildcards[w][0],'g'), this.wildcards[w][1]);
-			}}
-			this.exp = RegExp(exp, 'g');
+			var exp = ('(' + this.opener.join('|') + ')(?:' + this.logic.exp + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
+				i;
+			for(i=0;i<this.wildcards.length;i++){
+				exp = exp.replace(new RegExp(this.wildcards[i][0],'g'), this.wildcards[i][1]);
+			}
+			this.detect = RegExp(exp, 'gm');
 		},
 
 		// split pattern into opener, divider & closer
@@ -266,7 +308,7 @@ window.Mask = window.Mask ||  (function(){
 			var match;
 			for(var i = 0; i < this.items.length; i++){
 				if((match = this.items[i].match(this.splitNestedPattern) || this.items[i].match(this.splitPattern)) && match[1] && match[3]){
-					this.opener.push(this.esc(match[1]).replace(this.wildcards['%id'],''));
+					this.opener.push(this.esc(match[1]));
 					this.closer.push(this.esc(match[3]));
 					if(match[2]){
 						this.divider.push(this.esc(match[2]));
@@ -275,8 +317,36 @@ window.Mask = window.Mask ||  (function(){
 			}
 		},
 
-		analyseWildcards:function(){
-			// wildcards will be prepared here later to allow "logic pattern"
+		analyseSubstitutions:function(){
+			var i, pos = 0, f, list = [];
+			this.logic.pos = {};
+
+			for(i=0; i< this.logic.length; i++){
+				this.logic.pos[pos] = i;
+				list.push(this.logic[i].exp);
+				pos += this.logic[i].handler.length;
+				f = this.logic[i].handler.toString();
+				this.logic[i].params = f.substring(f.indexOf('(')+1, f.indexOf(')')).split(/\W+/);
+			}
+			this.logic.exp = list.join('|');
+		},
+		/**
+		 * prepare a match
+		 * @param match
+		 * @return {Object}
+		 */
+		getLogic: function(match){
+			var m = match.slice(2,-1),
+				l, h, p, i;
+			for(var i=0; i<m.length; i++){
+				if(typeof m[i] !== 'undefined'){
+					l = this.logic[this.logic.pos[i]];
+					h = l.handler;
+					p = m.slice(i, i + h.length);
+					i = p[l.params.lastIndexOf('id')];
+					return {handler:h, params:p, id:i};
+				}
+			}
 		},
 
 		// escape regexp chars //TODO: test if the escaping of  "-" is correct
@@ -299,35 +369,3 @@ window.Mask = window.Mask ||  (function(){
 	var extend = Mask.extend = function(obj){function F(){} F.prototype = obj; var o = new F(); for(var i = 1; i<arguments.length; i++){ for(var a in arguments[i]){if(arguments[i].hasOwnProperty(a)){ o[a] = arguments[i][a];}}} return o;};
 	return Mask;
 })();
-
-/* Example:
-var tmp = Mask.t(
-	'<!--defMarker/-->\n' +
-	'<!--dynMarker/-->\n' +
-	'<ul class="{{ top }}">\n' +
-		'<!--item-->\n' +
-		'\t<li class="{{itemClass}}">{{i}}: {{itemName}}</li> ' +
-		'{{unusedMarkerWillDisappear}}' +
-		'<!--/item-->\n' +
-	'</ul>\n',
-	{
-		pattern:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}', '<!--%s%id%s/-->', '<!--%s%id%s-->%tmp<!--%s/%id%s-->'],
-		cache:false,
-		marker:{
-			defMarker:"I'm not given in the data object!",
-			dynMarker:function(){return "I'm rendered dynamically by a function!";}
-		}
-	}
-);
-
-console.log(tmp.render({
-	listClass:'ul',
-	itemClass:'li',
-	item:[
-		{itemName:'list element'},
-		{itemClass:'li extra class', itemName:'another list element'}
-	],
-	unusedData:'???'
-}));
-
-//*/

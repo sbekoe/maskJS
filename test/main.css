@@ -1,0 +1,87 @@
+.test {
+    margin-top: 20px;}
+
+.test > div {
+    position: relative;}
+
+.test .mode {
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    display: none;}
+
+.test .mode:focus, .test > div:hover .mode {
+    display: block;}
+
+
+/** Header */
+.test h1, .test h2, .test pre {
+    margin: 0;
+    padding: 0;}
+
+.test {
+    font-family: "Helvetica Neue Light", "HelveticaNeue-Light", "Helvetica Neue", Calibri, Helvetica, Arial, sans-serif;
+}
+.test h1,#qunit-header {
+    padding: 0.5em 0 0.5em 1em;
+
+    color: #8699a4;
+    background-color: #0d3349;
+
+    font-size: 1.5em;
+    line-height: 1em;
+    font-weight: normal;
+
+    border-radius: 5px 5px 0 0;
+    -moz-border-radius: 5px 5px 0 0;
+    -webkit-border-top-right-radius: 5px;
+    -webkit-border-top-left-radius: 5px;
+}
+
+.test h1 a, #qunit-header a {
+    text-decoration: none;
+    color: #c2ccd1;
+}
+
+.test h1 a:hover, #qunit-header a:hover,
+.test h1 a:focus, #qunit-header a:focus {
+    color: #fff;
+}
+
+
+.test .banner, #qunit-banner {
+    height: 5px;
+    background-color: #ff8c00;
+}
+
+.test .toolbar, #qunit-testrunner-toolbar {
+    padding: 0.5em 0 0.5em 2em;
+    color: #5E740B;
+    background-color: #eee;
+}
+
+.test h2, #qunit-userAgent {
+    padding: 0.5em 0 0.5em 2.5em;
+    background-color: #2b81af;
+    color: #fff;
+    text-shadow: rgba(0, 0, 0, 0.5) 2px 2px 1px;
+}
+
+.test h2, .test .toolbar {
+    font-size: small;
+}
+
+.test .footer, #qunit-tests > li:last-child {
+    border-radius: 0 0 5px 5px;
+    -moz-border-radius: 0 0 5px 5px;
+    -webkit-border-bottom-right-radius: 5px;
+    -webkit-border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px 5px;
+    border-bottom-left-radius: 5px 5px;
+}
+
+.test .footer, #qunit-tests .pass {
+    color: #528CE0;
+    background-color: #D2E0E6;
+    padding: 0.4em 0.5em 0.4em 2.5em;
+}

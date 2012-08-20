@@ -14,13 +14,14 @@
 			CodeMirror.autoLoadMode(editorR, mode);
 			updateCurrentTest();
 		});
+		jQuery.getJSON('tests.json',{},init);
     });
 
 	jQuery.fn.codemirror = function(options){
 		return this.each(function(){$(this).data('codemirror',CodeMirror.fromTextArea(this, options || {}));});
 	}
 
-	jQuery.getJSON('tests.json',{},init);
+
 
 	function getCurrentTest(){
 		return {
@@ -38,7 +39,7 @@
 		$('.test .banner').removeClass('fail pass');
     }
 
-	function init(tests){
+	function init(tests, status,request){
 		$('[name="template"],[name="result"],[name="options"],[name="data"]').codemirror({
 			lineNumbers:true,
 			onKeyEvent: function(editor,event){
@@ -58,22 +59,18 @@
 			}
 		}).trigger('change');
 
-		test( "loaded tests", function() {
+		test(this.url, function() {
 			for(var i=0; i<tests.length; i++){
 				runTest(tests[i]);
 			}
 		});
-		/*
-		asyncTest('current test',1,function(){
-			$('#log').click(function(){
-				ok(true,'test');
-				//console.log(getCurrentTest());
-				//runTest(getCurrentTest());
-				start();
+		$('#log').click(function(){
+			//runTest(getCurrentTest(),true);
+			asyncTest('current test',1,function(){
+					runTest(getCurrentTest(),true);
+					start();
 			});
 		});
-		//*/
-		$('#log').click(function(){ runTest(getCurrentTest(),true); });
 	}
 
     function load(test){
@@ -97,7 +94,7 @@
 			console.log('### log current unit test ###');
 			console.log(lmask = mask);
 			console.log(ltokenizer = mask.tokenizer);
-			console.log(lresult = out);
+			console.log('result:\n'+(lresult = out));
 		}
 		equal(out,test.result,test.name);
 	}

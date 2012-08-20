@@ -218,11 +218,11 @@ window.Mask = window.Mask ||  (function(){
 
 	Tokenizer.prototype = {
 		wildcards: [// rename to patternSubstitution
-			['%w', '\\w+'],
-			['%s', '[ \\t]*'],
-			['%ls', '(?:^ *)?'],
-			['%le', '(?:\\s*$)?'],
-			['%n', '\\n']
+			['%w', '\\w+'], // word
+			['%s', '[ \\t]*'], // white space (no line breaks)
+			['%ls', '(?:^[ \\t]*)?'], // line start
+			['%le', '(?:[ \\t]*\\n)?'], // line end
+			['%n', '\\n'] // line break
 		],
 		logic:[
 			{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
@@ -240,7 +240,7 @@ window.Mask = window.Mask ||  (function(){
 					default: return '';
 				}
 			}},
-			{exp: '(\\w+)', handler:function(id){ return this.scope.find(id); }}
+			{exp: '(%w)', handler:function(id){ return this.scope.find(id); }}
 			//{exp: , handler:},
 		],
 		presets: {

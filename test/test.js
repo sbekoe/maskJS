@@ -65,7 +65,6 @@
 			}
 		});
 		$('#log').click(function(){
-			//runTest(getCurrentTest(),true);
 			asyncTest('current test',1,function(){
 					runTest(getCurrentTest(),true);
 					start();
@@ -102,9 +101,6 @@
     function evl(str){
         return eval('(' + str + ')');
     }
-	// formatJson() :: formats and indents JSON string
-	// from http://ketanjetty.com/coldfusion/javascript/format-json/
-	function formatJson(a){var b="";var c=a;var d=0;var e=c.length;var f="  ";var g="\n";var h="";for(var i=0;i<e;i++){h=c.substring(i,i+1);if(h=="}"||h=="]"){b=b+g;d=d-1;for(var j=0;j<d;j++){b=b+f}}b=b+h;if(h=="{"||h=="["||h==","){b=b+g;if(h=="{"||h=="["){d=d+1}for(var k=0;k<d;k++){b=b+f}}}return b}
 })(jQuery);
 
 /*

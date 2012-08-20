@@ -35,6 +35,7 @@
 
     function updateCurrentTest(){
 		CodeMirror.runMode(JSON.stringify(getCurrentTest()), {name:'javascript',json:true},$('.unitTest')[0]);
+		$('.test .banner').removeClass('fail pass');
     }
 
 	function init(tests){
@@ -64,7 +65,7 @@
 		});
 		/*
 		asyncTest('current test',1,function(){
-			$('#run').click(function(){
+			$('#log').click(function(){
 				ok(true,'test');
 				//console.log(getCurrentTest());
 				//runTest(getCurrentTest());
@@ -87,8 +88,12 @@
 
 	function runTest(test,log){
 		var mask = Mask.t(test.template,evl(test.options)),
-			out = mask.render(evl(test.data));
+			out = mask.render(evl(test.data)),
+			success = out==test.result;
 		if(log){
+			$('.test .banner')
+				.toggleClass('pass',success)
+				.toggleClass('fail',!success);
 			console.log('### log current unit test ###');
 			console.log(lmask = mask);
 			console.log(ltokenizer = mask.tokenizer);

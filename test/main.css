@@ -54,6 +54,14 @@
     background-color: #ff8c00;
 }
 
+.test .pass, #qunit-pass {
+    background-color: #C6E746;
+}
+
+.test .fail, #qunit-fail {
+    background-color: #EE5757;
+}
+
 .test .toolbar, #qunit-testrunner-toolbar {
     padding: 0.5em 0 0.5em 2em;
     color: #5E740B;

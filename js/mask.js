@@ -10,7 +10,7 @@ window.Mask = window.Mask ||  (function(){
 	// default options
 	var defaults = {
 		marker:{
-			'i': function(i,m){return i;}
+			'i': function(i){return i;}
 		},
 		cache:true,
 
@@ -65,7 +65,6 @@ window.Mask = window.Mask ||  (function(){
 				data = [data];
 			}
 			var tokens = arguments[1] || this.tokens,
-				scope = this.scope,
 				res = [],
 				d, i, m, t, pos, marker;
 			// iterate trough data
@@ -136,7 +135,6 @@ window.Mask = window.Mask ||  (function(){
 				tokens = [],
 				logic,
 				match,
-				logic,
 				id, pos;
 			tokens.marker = {};
 			while((match = this.tokenizer.detect.exec(template)) !== null){
@@ -172,7 +170,7 @@ window.Mask = window.Mask ||  (function(){
 						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}
 					// remember one marker less is opened
-					if(count>0){count--};
+					if(count>0){count--;}
 				}
 			}
 			tokens.push(template.slice(last));
@@ -211,9 +209,10 @@ window.Mask = window.Mask ||  (function(){
 	 * Create new Tokenizer
 	 * Used to build the regexp to detect the markers of a template
 	 * @constructor
+	 * @param {String|Object} options
 	 */
-	function Tokenizer(items){
-		this.init(items);
+	function Tokenizer(options){
+		this.init(options);
 	}
 
 	Tokenizer.prototype = {
@@ -244,7 +243,7 @@ window.Mask = window.Mask ||  (function(){
 			//{exp: , handler:},
 		],
 		presets: {
-			default:{
+			def:{
 				items:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}'],
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},
@@ -268,7 +267,7 @@ window.Mask = window.Mask ||  (function(){
 
 		/** @constructs */
 		init: function(items){
-			items = items || 'default';
+			items = items || 'def';
 			if(this.presets[items]){
 				this.exp = this.presets[items].exp;
 				this.items = this.presets[items].items;
@@ -300,7 +299,7 @@ window.Mask = window.Mask ||  (function(){
 			for(i=0;i<this.wildcards.length;i++){
 				exp = exp.replace(new RegExp(this.wildcards[i][0],'g'), this.wildcards[i][1]);
 			}
-			this.detect = RegExp(exp, 'gm');
+			this.detect = new RegExp(exp, 'gm');
 		},
 
 		// split pattern into opener, divider & closer
@@ -338,7 +337,7 @@ window.Mask = window.Mask ||  (function(){
 		getLogic: function(match){
 			var m = match.slice(2,-1),
 				l, h, p, i;
-			for(var i=0; i<m.length; i++){
+			for(i=0; i<m.length; i++){
 				if(typeof m[i] !== 'undefined'){
 					l = this.logic[this.logic.pos[i]];
 					h = l.handler;
@@ -347,13 +346,14 @@ window.Mask = window.Mask ||  (function(){
 					return {handler:h, params:p, id:i};
 				}
 			}
+			return false;
 		},
 
 		// escape regexp chars //TODO: test if the escaping of  "-" is correct
 		esc: function (str) {
 			return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
 		}
-	}
+	};
 
 	/**
 	 * Shorthand for new Mask(template, options)

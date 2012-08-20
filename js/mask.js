@@ -35,7 +35,7 @@ window.Mask = window.Mask ||  (function(){
 	 */
 	function Mask(template,options){
 		this.template = template;
-		this.options = extend(defaults,options);
+		this.options = extend({},defaults,options);
 		this.init();
 	}
 
@@ -50,7 +50,7 @@ window.Mask = window.Mask ||  (function(){
 		 * @this {Mask}
 		 */
 		init: function(){
-			this.tokenizer =  new Tokenizer(toArray(this.options.pattern));
+			this.tokenizer =  new Tokenizer(this.options.syntax);
 			this.scope = new Scope(defaults.marker,this.options.marker);
 			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
 		},
@@ -216,7 +216,7 @@ window.Mask = window.Mask ||  (function(){
 	}
 
 	Tokenizer.prototype = {
-		wildcards: [// rename to patternSubstitution
+		wildcards: [
 			['%w', '\\w+'], // word
 			['%s', '[ \\t]*'], // white space (no line breaks)
 			['%ls', '(?:^[ \\t]*)?'], // line start
@@ -265,15 +265,57 @@ window.Mask = window.Mask ||  (function(){
 			}
 		},
 
+		defaults: {
+			marker:{
+				logic: '%logic',
+				nested: '%tmp'
+				// id:'%id', TODO: add a third special wildcard %id
+				// comment:'%comment', TODO: add a fourth special wildcard %comment
+			},
+			// idMarker:'%id', TODO: add a third special wildcard %id
+			// commentMarker:'%comment', TODO: add a fourth special wildcard %comment
+			wildcards: [
+				['%w', '\\w+'], // word
+				['%s', '[ \\t]*'], // white space (no line breaks)
+				['%ls', '(?:^[ \\t]*)?'], // line start
+				['%le', '(?:[ \\t]*\\n)?'], // line end
+				['%n', '\\n'] // line break
+			],
+			logic:[
+				{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
+					var v0 = this.scope.find(id) || id,
+						v1 = this.scope.find(comp1) || comp1,
+						v2 = this.scope.find(comp2) || comp2,
+						v4 = this.scope.find(els) || els;
+					switch(rel){
+						case '==': return v1 == v2? v0 : v4;
+						case '!=': return v1 != v2? v0 : v4;
+						case '<': return v1 < v2? v0 : v4;
+						case '>': return v1 > v2? v0 : v4;
+						case '<=': return v1 <= v2? v0 : v4;
+						case '>=': return v1 >= v2? v0 : v4;
+						default: return '';
+					}
+				}},
+				{exp: '(%w)', handler:function(id){ return this.scope.find(id); }}
+				//{exp: , handler:},
+			]
+		},
+
 		/** @constructs */
-		init: function(items){
-			items = items || 'def';
-			if(this.presets[items]){
-				this.exp = this.presets[items].exp;
-				this.items = this.presets[items].items;
+		init: function(options){
+			options = options || this.presets[options] || this.presets['def'];
+			if(this.presets[options]){
+				this.exp = this.presets[options].exp;
+				this.items = this.presets[options].items;
 				return;
 			}
-			this.items = items;
+			this.items = options.pattern || options;
+			this.options = extend({},this.defaults,this.defaults[options.presets]||{},options,true);
+			if(options.detect){
+				this.detect = this.options.detect;
+				//return;
+			}
 
 			this.opener = [];
 			this.closer = [];
@@ -366,6 +408,27 @@ window.Mask = window.Mask ||  (function(){
 	var cache = Mask.cache = {};
 	var isArray = Mask.isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; };
 	var toArray = function(x){return isArray(x)? x : [x];};
-	var extend = Mask.extend = function(obj){function F(){} F.prototype = obj; var o = new F(); for(var i = 1; i<arguments.length; i++){ for(var a in arguments[i]){if(arguments[i].hasOwnProperty(a)){ o[a] = arguments[i][a];}}} return o;};
+	//var extend = Mask.extend = function(obj){function F(){} F.prototype = obj; var o = new F(); for(var i = 1; i<arguments.length; i++){ for(var a in arguments[i]){if(arguments[i].hasOwnProperty(a)){ o[a] = arguments[i][a];}}} return o;};
+	var extend = Mask.extend = function(o){
+		var l = arguments.length,
+			recursive = typeof arguments[l-1] ==='boolean' && arguments[l-1]===true,
+			options = recursive ? Array.prototype.slice.call(arguments,0,l-1) : arguments,
+			i, a;
+
+		for(i = 0; i<options.length; i++){
+			for(a in options[i]){
+				if(options[i].hasOwnProperty(a)){
+					if(recursive && isArray(options[i][a]) && isArray(o[a])){
+						o[a] = options[i][a].concat(o[a]);
+					}else if(recursive && typeof options[i][a]==='object' && typeof o[a]==='object'){
+						o[a] = extend(o[a],options[i][a],true);
+					}else{
+						o[a] = options[i][a];
+					}
+				}
+			}
+		}
+		return o;
+	}
 	return Mask;
 })();

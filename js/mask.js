@@ -216,40 +216,15 @@ window.Mask = window.Mask ||  (function(){
 	}
 
 	Tokenizer.prototype = {
-		wildcards: [
-			['%w', '\\w+'], // word
-			['%s', '[ \\t]*'], // white space (no line breaks)
-			['%ls', '(?:^[ \\t]*)?'], // line start
-			['%le', '(?:[ \\t]*\\n)?'], // line end
-			['%n', '\\n'] // line break
-		],
-		logic:[
-			{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
-				var v0 = this.scope.find(id) || id,
-					v1 = this.scope.find(comp1) || comp1,
-					v2 = this.scope.find(comp2) || comp2,
-					v4 = this.scope.find(els) || els;
-				switch(rel){
-					case '==': return v1 == v2? v0 : v4;
-					case '!=': return v1 != v2? v0 : v4;
-					case '<': return v1 < v2? v0 : v4;
-					case '>': return v1 > v2? v0 : v4;
-					case '<=': return v1 <= v2? v0 : v4;
-					case '>=': return v1 >= v2? v0 : v4;
-					default: return '';
-				}
-			}},
-			{exp: '(%w)', handler:function(id){ return this.scope.find(id); }}
-			//{exp: , handler:},
-		],
 		presets: {
-			def:{
-				items:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}'],
+			/*def:{
+				//logic:[], wildcards:[], ...
+				matchPositions:{},
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
-			},
+			},*/
 			html:{
-				items:['{{%s%id%s}}','{{%s%id%s:%tmp%s}}', '<!--%s%id%s/-->', '<!--%s%id%s-->%tmp<!--%s/%id%s-->'],
-				exp: /(\{\{\s*|\{\{\s*|<!\-\-\s*|<!\-\-\s*)(\w+)(?:\s*:|\s*\-\->)?|(\s*\}\}|\s*\}\}|\s*\/\-\->|<!\-\-\s*\/(\w+)\s*\-\->)/g
+				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)/gm,
+				indices:{"0":0, "5":1}
 			},
 			js:{
 				items:['{{%s%id%s}}', '/*%s%id%s*/%tmp/*%s/%id%s*/', '//%s%id%s%n%tmp///%s%id'],
@@ -272,8 +247,6 @@ window.Mask = window.Mask ||  (function(){
 				// id:'%id', TODO: add a third special wildcard %id
 				// comment:'%comment', TODO: add a fourth special wildcard %comment
 			},
-			// idMarker:'%id', TODO: add a third special wildcard %id
-			// commentMarker:'%comment', TODO: add a fourth special wildcard %comment
 			wildcards: [
 				['%w', '\\w+'], // word
 				['%s', '[ \\t]*'], // white space (no line breaks)
@@ -298,36 +271,26 @@ window.Mask = window.Mask ||  (function(){
 					}
 				}},
 				{exp: '(%w)', handler:function(id){ return this.scope.find(id); }}
-				//{exp: , handler:},
 			]
 		},
 
 		/** @constructs */
 		init: function(options){
-			options = options || this.presets[options] || this.presets['def'];
-			if(this.presets[options]){
-				this.exp = this.presets[options].exp;
-				this.items = this.presets[options].items;
-				return;
-			}
-			this.items = options.pattern || options;
+			options = typeof options ==='object'? options : this.presets[options] || this.presets['html'];
+
 			this.options = extend({},this.defaults,this.defaults[options.presets]||{},options,true);
 			if(options.detect){
 				this.detect = this.options.detect;
-				//return;
+				this.indices = this.options.indices;
+				return;
 			}
 
 			this.opener = [];
 			this.closer = [];
 			this.divider = [];
-			this.marker = {
-				logic: '%logic',
-				nested: '%tmp'
-			};
-			// regular expressions
-			this.splitNestedPattern = new RegExp('^(.+)' + this.marker.logic + '(?:(.*)' + this.marker.nested + ')(.+)$');
-
-			this.splitPattern = new RegExp('^(.+)' + this.marker.logic + '()(.+)$');
+			this.selector = [];
+			this.indices = {opn:{},lpn:{},log:{},cls:{},cmm:{}};
+			this.detect = //;
 
 			this.analyseSubstitutions();
 			this.analysePattern();
@@ -336,19 +299,23 @@ window.Mask = window.Mask ||  (function(){
 
 		// concatenate the sub pattern to a regex & substitute wildcards
 		build: function(){
-			var exp = ('(' + this.opener.join('|') + ')(?:' + this.logic.exp + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
+			var exp = ('(' + this.opener.join('|') + ')(?:' + this.selector.join('|') + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
+				wc = this.options.wildcards,
 				i;
-			for(i=0;i<this.wildcards.length;i++){
-				exp = exp.replace(new RegExp(this.wildcards[i][0],'g'), this.wildcards[i][1]);
+			for(i=0;i<wc.length;i++){
+				exp = exp.replace(new RegExp(wc[i][0],'g'), wc[i][1]);
 			}
 			this.detect = new RegExp(exp, 'gm');
 		},
 
 		// split pattern into opener, divider & closer
 		analysePattern: function(){
-			var match;
-			for(var i = 0; i < this.items.length; i++){
-				if((match = this.items[i].match(this.splitNestedPattern) || this.items[i].match(this.splitPattern)) && match[1] && match[3]){
+			var pattern = this.options.pattern,
+				single = new RegExp('^(.+)' + this.options.marker.logic + '()(.+)$'),
+				nested = new RegExp('^(.+)' + this.options.marker.logic + '(?:(.*)' + this.options.marker.nested + ')(.+)$'),
+				match;
+			for(var i = 0; i < pattern.length; i++){
+				if((match = pattern[i].match(nested) || pattern[i].match(single)) && match[1] && match[3]){
 					this.opener.push(this.esc(match[1]));
 					this.closer.push(this.esc(match[3]));
 					if(match[2]){
@@ -359,17 +326,14 @@ window.Mask = window.Mask ||  (function(){
 		},
 
 		analyseSubstitutions:function(){
-			var i, pos = 0, f, list = [];
-			this.logic.pos = {};
-
-			for(i=0; i< this.logic.length; i++){
-				this.logic.pos[pos] = i;
-				list.push(this.logic[i].exp);
-				pos += this.logic[i].handler.length;
-				f = this.logic[i].handler.toString();
-				this.logic[i].params = f.substring(f.indexOf('(')+1, f.indexOf(')')).split(/\W+/);
+			var pos = 0, logic = this.options.logic, f, i;
+			for(i=0; i< logic.length; i++){
+				this.indices[pos] = i;
+				pos += logic[i].handler.length;
+				this.selector.push(logic[i].exp);
+				f = logic[i].handler.toString();
+				logic[i].params = f.substring(f.indexOf('(')+1, f.indexOf(')')).split(/\W+/);
 			}
-			this.logic.exp = list.join('|');
 		},
 		/**
 		 * prepare a match
@@ -378,10 +342,11 @@ window.Mask = window.Mask ||  (function(){
 		 */
 		getLogic: function(match){
 			var m = match.slice(2,-1),
+				logic = this.options.logic,
 				l, h, p, i;
 			for(i=0; i<m.length; i++){
 				if(typeof m[i] !== 'undefined'){
-					l = this.logic[this.logic.pos[i]];
+					l = logic[this.indices[i]];
 					h = l.handler;
 					p = m.slice(i, i + h.length);
 					i = p[l.params.lastIndexOf('id')];
@@ -407,8 +372,6 @@ window.Mask = window.Mask ||  (function(){
 
 	var cache = Mask.cache = {};
 	var isArray = Mask.isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; };
-	var toArray = function(x){return isArray(x)? x : [x];};
-	//var extend = Mask.extend = function(obj){function F(){} F.prototype = obj; var o = new F(); for(var i = 1; i<arguments.length; i++){ for(var a in arguments[i]){if(arguments[i].hasOwnProperty(a)){ o[a] = arguments[i][a];}}} return o;};
 	var extend = Mask.extend = function(o){
 		var l = arguments.length,
 			recursive = typeof arguments[l-1] ==='boolean' && arguments[l-1]===true,
@@ -429,6 +392,6 @@ window.Mask = window.Mask ||  (function(){
 			}
 		}
 		return o;
-	}
+	};
 	return Mask;
 })();

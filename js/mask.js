@@ -158,14 +158,11 @@ window.Mask = window.Mask ||  (function(){
 					if(count === 1){
 						// nested templates are handled recursive. if the current marker has no nested template, '' is stored.
 						m.nested = this.compile(template.slice(m.j,match.index));
-						if(m.opened + m.nested.join('') + match[0] != template.slice(last,match.index+match[0].length)){
-							tokens.push(template.slice(last, m.i),'');
-							// if no markers are detected until now, create an object for them
-							if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
-							// associate position & template with marker.
-							tokens.marker[m.id][tokens.length-1] = m;
-						}else{console.log( m.opened + m.nested.join('') + match[0] );}
-
+						tokens.push(template.slice(last, m.i),'');
+						// if no markers are detected until now, create an object for them
+						if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
+						// associate position & template with marker.
+						tokens.marker[m.id][tokens.length-1] = m;
 						// update the expression index for the next loop
 						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}

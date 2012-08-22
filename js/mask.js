@@ -10,7 +10,7 @@ window.Mask = window.Mask ||  (function(){
 	// default options
 	var defaults = {
 		marker:{
-			'i': function(i){return i;}
+			//'i': function(i){return i;}
 		},
 		cache:true,
 
@@ -51,7 +51,7 @@ window.Mask = window.Mask ||  (function(){
 		 */
 		init: function(){
 			this.tokenizer =  new Tokenizer(this.options.syntax);
-			this.scope = new Scope(defaults.marker,this.options.marker);
+			this.scope = new Scope({},defaults.marker,this.options.marker);
 			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
 		},
 
@@ -66,19 +66,22 @@ window.Mask = window.Mask ||  (function(){
 			}
 			var tokens = arguments[1] || this.tokens,
 				res = [],
+				l = data.length,
 				d, i, m, t, pos, marker;
+			this.scope[0].length = l;
 			// iterate trough data
-			for(i = 0; i<data.length;i++){
+			for(i = 0; i<l;i++){
 				if(data[i]!==null && typeof data[i] !== 'undefined'){
 					this.scope.push(data[i]);
+					this.scope[0].i = i;
 					// iterate trough the markers of the current template
 					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
-						//d = this.scope.find(m);
-						t = typeof d;
+						d = this.scope.find(m);
+//						t = typeof d;
 						// iterate trough the positions the current marker should be inserted at
 						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
 							marker = tokens.marker[m][pos];
-							d = marker.logic.apply(this, marker.params);
+							d = marker.logic? marker.logic.apply({scope:this.scope, data:d, length:l, i:i}, marker.params) : d;
 							t = typeof d;
 							tokens[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
@@ -128,14 +131,13 @@ window.Mask = window.Mask ||  (function(){
 		 */
  		compile: function(template){
 			if(!template){
-				return '';
+				return [];
 			}
 			var last = this.tokenizer.detect.lastIndex = 0,
 				count = 0,
 				tokens = [],
-				logic,
-				match,
-				id, pos;
+				m,
+				match;
 			tokens.marker = {};
 			while((match = this.tokenizer.detect.exec(template)) !== null){
 
@@ -144,28 +146,26 @@ window.Mask = window.Mask ||  (function(){
 				if(match[1]){
 					// handle marker if all previous markers are closed
 					if(count===0){
-						tokens.push(template.slice(last,match.index),'');
-						pos = match.index + match[0].length;
-						logic = this.tokenizer.getLogic(match);
-						//id = match[2];
-						id = logic.id;
+						m = this.tokenizer.getMarker(match); // marker itself
 					}
 					// remember: one more marker is opened
 					count++;
 				}
 
 				// found closing marker TODO: check if the closing marker belongs to the opening marker
-				if(match[match.length-1]){
+				if(match[match.length-2]){
 					// if the number opened markers matches the number of closed markers
 					if(count === 1){
-						// if no markers are detected until now, create an object for them
-						if(!tokens.marker[id]){tokens.marker[id] = {};}
-						// associate position & template with marker. nested templates are handled recursive. if the current marker has no nested template, '' is stored.
-						tokens.marker[id][tokens.length-1] = {
-							nested:this.compile(template.slice(pos,match.index)),
-							logic: logic.handler,
-							params: logic.params
-						};
+						// nested templates are handled recursive. if the current marker has no nested template, '' is stored.
+						m.nested = this.compile(template.slice(m.j,match.index));
+						if(m.opened + m.nested.join('') + match[0] != template.slice(last,match.index+match[0].length)){
+							tokens.push(template.slice(last, m.i),'');
+							// if no markers are detected until now, create an object for them
+							if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
+							// associate position & template with marker.
+							tokens.marker[m.id][tokens.length-1] = m;
+						}else{console.log( m.opened + m.nested.join('') + match[0] );}
+
 						// update the expression index for the next loop
 						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
 					}
@@ -223,7 +223,7 @@ window.Mask = window.Mask ||  (function(){
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},*/
 			html:{
-				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)/gm,
+				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)()/gm,
 				indices:{"0":0, "5":1}
 			},
 			js:{
@@ -243,16 +243,17 @@ window.Mask = window.Mask ||  (function(){
 		defaults: {
 			marker:{
 				logic: '%logic',
-				nested: '%tmp'
+				nested: '%tmp',
 				// id:'%id', TODO: add a third special wildcard %id
-				// comment:'%comment', TODO: add a fourth special wildcard %comment
+				comment:'%comment'
 			},
 			wildcards: [
 				['%w', '\\w+'], // word
 				['%s', '[ \\t]*'], // white space (no line breaks)
 				['%ls', '(?:^[ \\t]*)?'], // line start
 				['%le', '(?:[ \\t]*\\n)?'], // line end
-				['%n', '\\n'] // line break
+				['%n', '\\n'], // line break
+				['%comment','.*']
 			],
 			logic:[
 				{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
@@ -270,7 +271,7 @@ window.Mask = window.Mask ||  (function(){
 						default: return '';
 					}
 				}},
-				{exp: '(%w)', handler:function(id){ return this.scope.find(id); }}
+				{exp: '(%w)', handler:false}
 			]
 		},
 
@@ -289,19 +290,21 @@ window.Mask = window.Mask ||  (function(){
 			this.closer = [];
 			this.divider = [];
 			this.selector = [];
-			this.indices = {opn:{},lpn:{},log:{},cls:{},cmm:{}};
-			this.detect = //;
+			this.comment = [];
+			this.indices = {opn:{}, lpn:{}, log:{}, cls:{}, cmm:{}, pos:0};
+			this.detect = /r/;
 
-			this.analyseSubstitutions();
 			this.analysePattern();
+			this.analyseSubstitutions();
 			this.build();
 		},
 
 		// concatenate the sub pattern to a regex & substitute wildcards
 		build: function(){
-			var exp = ('(' + this.opener.join('|') + ')(?:' + this.selector.join('|') + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')'),
+			var exp = '(' + this.opener.join('|') + ')(?:' + this.selector.join('|') + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')' + (this.comment.length? '|('+this.comment.join('|')+')' : '()'),
 				wc = this.options.wildcards,
 				i;
+
 			for(i=0;i<wc.length;i++){
 				exp = exp.replace(new RegExp(wc[i][0],'g'), wc[i][1]);
 			}
@@ -321,6 +324,8 @@ window.Mask = window.Mask ||  (function(){
 					if(match[2]){
 						this.divider.push(this.esc(match[2]));
 					}
+				}else if(pattern[i].indexOf(this.options.marker.comment)>1){
+					this.comment.push(this.esc(pattern[i]));
 				}
 			}
 		},
@@ -340,7 +345,7 @@ window.Mask = window.Mask ||  (function(){
 		 * @param match
 		 * @return {Object}
 		 */
-		getLogic: function(match){
+		getMarker: function(match){
 			var m = match.slice(2,-1),
 				logic = this.options.logic,
 				l, h, p, i;
@@ -349,8 +354,8 @@ window.Mask = window.Mask ||  (function(){
 					l = logic[this.indices[i]];
 					h = l.handler;
 					p = m.slice(i, i + h.length);
-					i = p[l.params.lastIndexOf('id')];
-					return {handler:h, params:p, id:i};
+					i = p[l.params.lastIndexOf('id')]||m[i];
+					return {logic:h, params:p, id:i, i:match.index, j:match.index+match[0].length, opened:match[0]};
 				}
 			}
 			return false;

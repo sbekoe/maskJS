@@ -220,8 +220,8 @@ window.Mask = window.Mask ||  (function(){
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},*/
 			html:{
-				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)/gm,
-				indices:{"0":0, "5":1}
+				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*|\[|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?|\])?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?|\[\/\w+\]|[ \t]*\-\->(?:[ \t]*\n)?)/gm,
+				indices:{"0":0,"5":1,"opn":{},"lpn":{},"logic":[{"params":["comp1","rel","comp2","id","els"],"id":3,"start":2,"end":7,"check":5},{"params":[""],"id":0,"start":7,"end":8,"check":7}],"cls":{},"cmm":{},"pos":0,"id":[]}
 			},
 			js:{
 				items:['{{%s%id%s}}', '/*%s%id%s*/%tmp/*%s/%id%s*/', '//%s%id%s%n%tmp///%s%id'],
@@ -287,7 +287,7 @@ window.Mask = window.Mask ||  (function(){
 			this.closer = [];
 			this.divider = [];
 			this.selector = [];
-			this.indices = {opn:{}, lpn:{}, log:{}, cls:{}, cmm:{}, pos:0, id:[]};
+			this.indices = {opn:{}, lpn:{}, logic:[], cls:{}, cmm:{}, pos:0, id:[]};
 			this.detect = /r/;
 
 			this.analyse();
@@ -311,8 +311,8 @@ window.Mask = window.Mask ||  (function(){
 				logic = this.options.logic,
 				single = new RegExp('^(.+)' + this.options.marker.logic + '()(.+)$'),
 				nested = new RegExp('^(.+)' + this.options.marker.logic + '(?:(.*)' + this.options.marker.nested + ')(.+)$'),
-				pos = 0,
-				f, i, match;
+				pos = 2,
+				i, match, id, params;
 
 			// split pattern into opener, divider & closer
 			for(i = 0; i < pattern.length; i++){
@@ -327,11 +327,18 @@ window.Mask = window.Mask ||  (function(){
 
 			// build the selector regexp part
 			for(i=0; i< logic.length; i++){
-				this.indices[pos] = i;
-				pos += logic[i].handler.length;
+				params = logic[i].params? logic[i].params : logic[i].handler.toString().substring(logic[i].handler.toString().indexOf('(')+1, logic[i].handler.toString().indexOf(')')).split(/\W+/);
+				id = typeof logic[i].id == 'number'? logic[i].id : params.lastIndexOf('id')>-1? params.lastIndexOf('id') : 0;
+
+				this.indices.logic[i] = {
+					params: params,
+					id:id,
+					start: pos,
+					end: pos + params.length,
+					check: pos + id
+				};
+				pos += params.length;
 				this.selector.push(logic[i].exp);
-				f = logic[i].handler.toString();
-				logic[i].params = f.substring(f.indexOf('(')+1, f.indexOf(')')).split(/\W+/);
 			}
 		},
 		/**
@@ -342,14 +349,26 @@ window.Mask = window.Mask ||  (function(){
 		getMarker: function(match){
 			var m = match.slice(2,-1),
 				logic = this.options.logic,
-				l, h, p, i;
-			for(i=0; i<m.length; i++){
+				indices = this.indices.logic,
+				i;
+			/*for(i=0; i<m.length; i++){
 				if(typeof m[i] !== 'undefined'){
 					l = logic[this.indices[i]];
 					h = l.handler;
 					p = m.slice(i, i + h.length);
 					i = p[l.params.lastIndexOf('id')]||m[i];
 					return {logic:h, params:p, id:i, i:match.index, j:match.index+match[0].length, opened:match[0]};
+				}
+			}*/
+			for(i=0; i<logic.length; i++){
+				if(typeof match[indices[i].check] !== 'undefined'){
+					return {
+						logic:logic[i].handler,
+						params:match.slice(indices[i].start, indices[i].end),
+						id:match[indices[i].check],
+						i:match.index,
+						j:match.index+match[0].length,
+						opened:match[0]};
 				}
 			}
 			return false;

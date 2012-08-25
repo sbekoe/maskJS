@@ -153,7 +153,7 @@ window.Mask = window.Mask ||  (function(){
 				}
 
 				// found closing marker TODO: check if the closing marker belongs to the opening marker
-				if(match[match.length-2]){
+				if(match[match.length-1]){
 					// if the number opened markers matches the number of closed markers
 					if(count === 1){
 						// nested templates are handled recursive. if the current marker has no nested template, '' is stored.
@@ -220,7 +220,7 @@ window.Mask = window.Mask ||  (function(){
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},*/
 			html:{
-				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)()/gm,
+				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?)/gm,
 				indices:{"0":0, "5":1}
 			},
 			js:{
@@ -241,8 +241,8 @@ window.Mask = window.Mask ||  (function(){
 			marker:{
 				logic: '%logic',
 				nested: '%tmp',
-				// id:'%id', TODO: add a third special wildcard %id
-				comment:'%comment'
+				 id:'%id' //TODO: add a third special wildcard %id
+				//comment:'%comment'
 			},
 			wildcards: [
 				['%w', '\\w+'], // word
@@ -287,18 +287,16 @@ window.Mask = window.Mask ||  (function(){
 			this.closer = [];
 			this.divider = [];
 			this.selector = [];
-			this.comment = [];
-			this.indices = {opn:{}, lpn:{}, log:{}, cls:{}, cmm:{}, pos:0};
+			this.indices = {opn:{}, lpn:{}, log:{}, cls:{}, cmm:{}, pos:0, id:[]};
 			this.detect = /r/;
 
-			this.analysePattern();
-			this.analyseSubstitutions();
+			this.analyse();
 			this.build();
 		},
 
 		// concatenate the sub pattern to a regex & substitute wildcards
 		build: function(){
-			var exp = '(' + this.opener.join('|') + ')(?:' + this.selector.join('|') + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')' + (this.comment.length? '|('+this.comment.join('|')+')' : '()'),
+			var exp = '(' + this.opener.join('|') + ')(?:' + this.selector.join('|') + ')(?:' + this.divider.join('|') + ')?|(' + this.closer.join('|') + ')',// + (this.comment.length? '|('+this.comment.join('|')+')' : '()'),
 				wc = this.options.wildcards,
 				i;
 
@@ -308,27 +306,26 @@ window.Mask = window.Mask ||  (function(){
 			this.detect = new RegExp(exp, 'gm');
 		},
 
-		// split pattern into opener, divider & closer
-		analysePattern: function(){
+		analyse: function(){
 			var pattern = this.options.pattern,
+				logic = this.options.logic,
 				single = new RegExp('^(.+)' + this.options.marker.logic + '()(.+)$'),
 				nested = new RegExp('^(.+)' + this.options.marker.logic + '(?:(.*)' + this.options.marker.nested + ')(.+)$'),
-				match;
-			for(var i = 0; i < pattern.length; i++){
+				pos = 0,
+				f, i, match;
+
+			// split pattern into opener, divider & closer
+			for(i = 0; i < pattern.length; i++){
 				if((match = pattern[i].match(nested) || pattern[i].match(single)) && match[1] && match[3]){
 					this.opener.push(this.esc(match[1]));
 					this.closer.push(this.esc(match[3]));
 					if(match[2]){
 						this.divider.push(this.esc(match[2]));
 					}
-				}else if(pattern[i].indexOf(this.options.marker.comment)>1){
-					this.comment.push(this.esc(pattern[i]));
 				}
 			}
-		},
 
-		analyseSubstitutions:function(){
-			var pos = 0, logic = this.options.logic, f, i;
+			// build the selector regexp part
 			for(i=0; i< logic.length; i++){
 				this.indices[pos] = i;
 				pos += logic[i].handler.length;

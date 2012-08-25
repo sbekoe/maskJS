@@ -347,19 +347,10 @@ window.Mask = window.Mask ||  (function(){
 		 * @return {Object}
 		 */
 		getMarker: function(match){
-			var m = match.slice(2,-1),
-				logic = this.options.logic,
+			var logic = this.options.logic,
 				indices = this.indices.logic,
 				i;
-			/*for(i=0; i<m.length; i++){
-				if(typeof m[i] !== 'undefined'){
-					l = logic[this.indices[i]];
-					h = l.handler;
-					p = m.slice(i, i + h.length);
-					i = p[l.params.lastIndexOf('id')]||m[i];
-					return {logic:h, params:p, id:i, i:match.index, j:match.index+match[0].length, opened:match[0]};
-				}
-			}*/
+
 			for(i=0; i<logic.length; i++){
 				if(typeof match[indices[i].check] !== 'undefined'){
 					return {

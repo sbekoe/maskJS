@@ -77,7 +77,6 @@ window.Mask = window.Mask ||  (function(){
 					// iterate trough the markers of the current template
 					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
 						d = this.scope.find(m);
-//						t = typeof d;
 						// iterate trough the positions the current marker should be inserted at
 						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
 							marker = tokens.marker[m][pos];
@@ -134,40 +133,48 @@ window.Mask = window.Mask ||  (function(){
 				return [];
 			}
 			var last = this.tokenizer.detect.lastIndex = 0,
+				t = this.tokenizer,
 				count = 0,
 				tokens = [],
 				m,
-				match;
+				match,id, closed = false, next;
 			tokens.marker = {};
-			while((match = this.tokenizer.detect.exec(template)) !== null){
-
+			while((match = t.detect.exec(template)) !== null || count){
 
 				// found opening marker
-				if(match[1]){
-					// handle marker if all previous markers are closed
-					if(count===0){
-						m = this.tokenizer.getMarker(match); // marker itself
+				if(match && match[1]){
+					// get marker instance if there are no previous unclosed markers
+					if(count === 0){
+						m = t.getMarker(match); // marker itself
 					}
 					// remember: one more marker is opened
 					count++;
 				}
 
-				// found closing marker TODO: check if the closing marker belongs to the opening marker
-				if(match[match.length-1]){
-					// if the number opened markers matches the number of closed markers
-					if(count === 1){
-						// nested templates are handled recursive. if the current marker has no nested template, '' is stored.
+				// found closing marker
+				else if(m && match && match[t.indices.closer]){
+					// get the closing id if available
+					id = id=match.slice(t.indices.id).join('');
+					// check if the number of opened markers matches the number of closed markers and check available closing id against the opening id
+					if(count === 1 && (!id | id === m.id)){
+						// nested templates are handled recursive. if the current marker has no nested template, [] is stored.
 						m.nested = this.compile(template.slice(m.j,match.index));
-						tokens.push(template.slice(last, m.i),'');
-						// if no markers are detected until now, create an object for them
-						if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
-						// associate position & template with marker.
-						tokens.marker[m.id][tokens.length-1] = m;
-						// update the expression index for the next loop
-						this.tokenizer.detect.lastIndex = last = match.index + match[0].length;
+						closed = true;
 					}
 					// remember one marker less is opened
 					if(count>0){count--;}
+				}
+
+				if(closed || !match){
+					tokens.push(template.slice(last, m.i),'');
+					// if no markers are detected until now, create an object for them
+					if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
+					// associate position & template with marker.
+					tokens.marker[m.id][tokens.length-1] = m;
+					// update the expression index for the next loop
+					this.tokenizer.detect.lastIndex = last = match? match.index + match[0].length : m.j;
+					closed = false;
+					count = 0;
 				}
 			}
 			tokens.push(template.slice(last));
@@ -221,7 +228,7 @@ window.Mask = window.Mask ||  (function(){
 			},*/
 			html:{
 				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*|\[|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?|\])?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?|\[\/\w+\]|[ \t]*\-\->(?:[ \t]*\n)?)/gm,
-				indices:{"0":0,"5":1,"opn":{},"lpn":{},"logic":[{"params":["comp1","rel","comp2","id","els"],"id":3,"start":2,"end":7,"check":5},{"params":[""],"id":0,"start":7,"end":8,"check":7}],"cls":{},"cmm":{},"pos":0,"id":[]}
+				indices:{"opener":1,"closer":8,"logic":[{"params":["comp1","rel","comp2","id","els"],"id":3,"start":2,"end":7,"check":5},{"params":[""],"id":0,"start":7,"end":8,"check":7}],"id":9,"i":2}
 			},
 			js:{
 				items:['{{%s%id%s}}', '/*%s%id%s*/%tmp/*%s/%id%s*/', '//%s%id%s%n%tmp///%s%id'],
@@ -245,12 +252,13 @@ window.Mask = window.Mask ||  (function(){
 				//comment:'%comment'
 			},
 			wildcards: [
-				['%w', '\\w+'], // word
-				['%s', '[ \\t]*'], // white space (no line breaks)
+				['%id','(%path)'],
+				['%path','%w'],
 				['%ls', '(?:^[ \\t]*)?'], // line start
 				['%le', '(?:[ \\t]*\\n)?'], // line end
 				['%n', '\\n'], // line break
-				['%comment','.*']
+				['%s', '[ \\t]*'], // white space (no line breaks)
+				['%w', '\\w+'] // word
 			],
 			logic:[
 				{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
@@ -269,6 +277,7 @@ window.Mask = window.Mask ||  (function(){
 					}
 				}},
 				{exp: '(%w)', handler:false}
+//				{exp:'(.*)', handler:false}
 			]
 		},
 
@@ -287,7 +296,8 @@ window.Mask = window.Mask ||  (function(){
 			this.closer = [];
 			this.divider = [];
 			this.selector = [];
-			this.indices = {opn:{}, lpn:{}, logic:[], cls:{}, cmm:{}, pos:0, id:[]};
+			this.indices = {opener:1, closer:0, logic:[], id:[],i:2};
+			//this.options.wildcards.push([this.options.marker.id,'(\\w+)'])
 			this.detect = /r/;
 
 			this.analyse();
@@ -310,20 +320,9 @@ window.Mask = window.Mask ||  (function(){
 			var pattern = this.options.pattern,
 				logic = this.options.logic,
 				single = new RegExp('^(.+)' + this.options.marker.logic + '()(.+)$'),
-				nested = new RegExp('^(.+)' + this.options.marker.logic + '(?:(.*)' + this.options.marker.nested + ')(.+)$'),
+				nested = new RegExp('^(.+)' + this.options.marker.logic + '(?:(.*)' + this.options.marker.nested + ')(.+(%id).*|.+)$'),
 				pos = 2,
 				i, match, id, params;
-
-			// split pattern into opener, divider & closer
-			for(i = 0; i < pattern.length; i++){
-				if((match = pattern[i].match(nested) || pattern[i].match(single)) && match[1] && match[3]){
-					this.opener.push(this.esc(match[1]));
-					this.closer.push(this.esc(match[3]));
-					if(match[2]){
-						this.divider.push(this.esc(match[2]));
-					}
-				}
-			}
 
 			// build the selector regexp part
 			for(i=0; i< logic.length; i++){
@@ -339,6 +338,24 @@ window.Mask = window.Mask ||  (function(){
 				};
 				pos += params.length;
 				this.selector.push(logic[i].exp);
+			}
+
+			this.indices.closer = pos;
+			pos ++;
+			this.indices.id = pos;
+			// split pattern into opener, divider & closer
+			for(i = 0; i < pattern.length; i++){
+				if((match = pattern[i].match(nested) || pattern[i].match(single)) && match[1] && match[3]){
+					this.opener.push(this.esc(match[1]));
+					this.closer.push(this.esc(match[3]));
+					if(match[2]){
+						this.divider.push(this.esc(match[2]));
+					}
+//					if(match[4]){
+//						this.indices.id.push(pos);
+//						pos++;
+//					}
+				}
 			}
 		},
 		/**
@@ -359,7 +376,9 @@ window.Mask = window.Mask ||  (function(){
 						id:match[indices[i].check],
 						i:match.index,
 						j:match.index+match[0].length,
-						opened:match[0]};
+						opened:match[0],
+						nested:[]
+					};
 				}
 			}
 			return false;

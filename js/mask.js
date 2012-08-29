@@ -67,6 +67,7 @@ window.Mask = window.Mask ||  (function(){
 			var tokens = arguments[1] || this.tokens,
 				res = [],
 				l = data.length,
+				s = this.tokenizer.options.logic,
 				d, i, m, t, pos, marker;
 			this.scope[0].length = l;
 			// iterate trough data
@@ -80,12 +81,12 @@ window.Mask = window.Mask ||  (function(){
 						// iterate trough the positions the current marker should be inserted at
 						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
 							marker = tokens.marker[m][pos];
-							d = marker.logic? marker.logic.apply({scope:this.scope, data:d, length:l, i:i}, marker.params) : d;
+							d = s[marker.logic].handler? s[marker.logic].handler.apply({scope:this.scope, data:d, length:l, i:i}, marker.params) : d;
 							t = typeof d;
-							tokens[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
+							tokens.template[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
 					}}
-					res = res.concat(tokens);
+					res = res.concat(tokens.template);
 					this.scope.pop();
 				}
 			}
@@ -135,10 +136,11 @@ window.Mask = window.Mask ||  (function(){
 			var last = this.tokenizer.detect.lastIndex = 0,
 				t = this.tokenizer,
 				count = 0,
-				tokens = [],
+//				tokens = [],
+				tokens = {template:[], marker:{}, partial:{}},
 				m,
-				match,id, closed = false, next;
-			tokens.marker = {};
+				match,id, closed = false;
+//			tokens.marker = {};
 			while((match = t.detect.exec(template)) !== null || count){
 
 				// found opening marker
@@ -156,9 +158,10 @@ window.Mask = window.Mask ||  (function(){
 					// get the closing id if available
 					id = id=match.slice(t.indices.id).join('');
 					// check if the number of opened markers matches the number of closed markers and check available closing id against the opening id
-					if(count === 1 && (!id | id === m.id)){
+					if(count === 1 && (!id || m.params.indexOf(id)>-1)){
+						m.id = id || m.id;
 						// nested templates are handled recursive. if the current marker has no nested template, [] is stored.
-						m.nested = this.compile(template.slice(m.j,match.index));
+						m.nested = this.compile(template.slice(m.end,match.index));
 						closed = true;
 					}
 					// remember one marker less is opened
@@ -166,19 +169,19 @@ window.Mask = window.Mask ||  (function(){
 				}
 
 				if(closed || !match){
-					tokens.push(template.slice(last, m.i),'');
+					tokens.template.push(template.slice(last, m.start),'');
 					// if no markers are detected until now, create an object for them
 					if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
 					// associate position & template with marker.
-					tokens.marker[m.id][tokens.length-1] = m;
+					tokens.marker[m.id][tokens.template.length-1] = m;
 					// update the expression index for the next loop
-					this.tokenizer.detect.lastIndex = last = match? match.index + match[0].length : m.j;
+					this.tokenizer.detect.lastIndex = last = match? match.index + match[0].length : m.end;
 					closed = false;
 					count = 0;
 				}
 			}
-			tokens.push(template.slice(last));
-			return tokens.length? tokens : this.tokens;
+			tokens.template.push(template.slice(last));
+			return tokens.template.length? tokens : this.tokens;
 		}
 	};
 
@@ -200,13 +203,25 @@ window.Mask = window.Mask ||  (function(){
 		length:0,
 		push: Array.prototype.push,
 		pop: Array.prototype.pop,
-		find: function(marker){
-			for(var i = this.length-1; i+1; i--){
-				if(typeof this[i][marker] !== 'undefined'){
-					return this[i][marker];
+		find: function(namespace){
+			if(typeof namespace === 'string' && namespace.length){
+				for(var i = this.length - 1, ns = namespace.split(/\W+/); i+1; i--){
+					if(typeof this[i][ns[0]] !== 'undefined'){
+						return ns.length == 1? this[i][ns[0]] : this.resolveNamespace(ns, this[i]);
+					}
 				}
 			}
+		},
+		resolveNamespace: function(ns,root){
+			for(var i= 0, o = root; i<ns.length; i++){
+				if(typeof o[ns[i]] === 'undefined'){
+					return undefined;
+				}
+				o = o[ns[i]];
+			}
+			return o;
 		}
+
 	};
 
 	/**
@@ -227,7 +242,7 @@ window.Mask = window.Mask ||  (function(){
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},*/
 			html:{
-				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*|\[|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+)(==|!=|<|>|<=|>=)(\w+)\?(\w+)(?:\:(\w+))?|(\w+))(?:[ \t]*\-\->(?:[ \t]*\n)?|\])?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/\w+[ \t]*\-\->(?:[ \t]*\n)?|\[\/\w+\]|[ \t]*\-\->(?:[ \t]*\n)?)/gm,
+				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+(?:\.\w+)*)(?:(==|!=|<|>|<=|>=)(\w+(?:\.\w+)*))?\?(\w+(?:\.\w+)*)(?:\:(\w+(?:\.\w+)*))?|(\w+(?:\.\w+)*))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/(\w+(?:\.\w+)*)[ \t]*\-\->(?:[ \t]*\n)?|[ \t]*\-\->(?:[ \t]*\n)?)/gm,
 				indices:{"opener":1,"closer":8,"logic":[{"params":["comp1","rel","comp2","id","els"],"id":3,"start":2,"end":7,"check":5},{"params":[""],"id":0,"start":7,"end":8,"check":7}],"id":9,"i":2}
 			},
 			js:{
@@ -248,36 +263,36 @@ window.Mask = window.Mask ||  (function(){
 			marker:{
 				logic: '%logic',
 				nested: '%tmp',
-				 id:'%id' //TODO: add a third special wildcard %id
+				id:'%id' //TODO: add a third special wildcard %id
 				//comment:'%comment'
 			},
 			wildcards: [
-				['%id','(%path)'],
-				['%path','%w'],
-				['%ls', '(?:^[ \\t]*)?'], // line start
-				['%le', '(?:[ \\t]*\\n)?'], // line end
-				['%n', '\\n'], // line break
-				['%s', '[ \\t]*'], // white space (no line breaks)
-				['%w', '\\w+'] // word
+				['%id','(%ns)'],				// id for closing marker
+				['%ns','%w(?:\\.%w)*'],			// the namespace to be resolved while getting data
+				['%ls', '(?:^[ \\t]*)?'],		// line start
+				['%le', '(?:[ \\t]*\\n)?'],		// line end
+				['%n', '\\n'],					// line break
+				['%s', '[ \\t]*'],				// white space (no line breaks)
+				['%w', '\\w+']					// word
 			],
 			logic:[
-				{exp: '(%w)(==|!=|<|>|<=|>=)(%w)\\?(%w)(?:\\:(%w))?', handler:function(comp1, rel, comp2, id, els){
-					var v0 = this.scope.find(id) || id,
-						v1 = this.scope.find(comp1) || comp1,
+				{exp: '(%ns)(?:(==|!=|<|>|<=|>=)(%ns))?\\?(%ns)(?:\\:(%ns))?', handler:function(comp1, rel, comp2, id, alt){
+					var _id = this.scope.find(id),
+						_v1 = this.scope.find(comp1),
+						v1 = _v1 || comp1,
 						v2 = this.scope.find(comp2) || comp2,
-						v4 = this.scope.find(els) || els;
+						v4 = this.scope.find(alt) || alt;
 					switch(rel){
-						case '==': return v1 == v2? v0 : v4;
-						case '!=': return v1 != v2? v0 : v4;
-						case '<': return v1 < v2? v0 : v4;
-						case '>': return v1 > v2? v0 : v4;
-						case '<=': return v1 <= v2? v0 : v4;
-						case '>=': return v1 >= v2? v0 : v4;
-						default: return '';
+						case '==': return v1 == v2? _id : v4;
+						case '!=': return v1 != v2? _id : v4;
+						case '<': return v1 < v2? _id : v4;
+						case '>': return v1 > v2? _id : v4;
+						case '<=': return v1 <= v2? _id : v4;
+						case '>=': return v1 >= v2? _id : v4;
+						default: return _v1? _id : v4;
 					}
 				}},
-				{exp: '(%w)', handler:false}
-//				{exp:'(.*)', handler:false}
+				{exp: '(%ns)', handler:false}
 			]
 		},
 
@@ -297,7 +312,6 @@ window.Mask = window.Mask ||  (function(){
 			this.divider = [];
 			this.selector = [];
 			this.indices = {opener:1, closer:0, logic:[], id:[],i:2};
-			//this.options.wildcards.push([this.options.marker.id,'(\\w+)'])
 			this.detect = /r/;
 
 			this.analyse();
@@ -327,22 +341,20 @@ window.Mask = window.Mask ||  (function(){
 			// build the selector regexp part
 			for(i=0; i< logic.length; i++){
 				params = logic[i].params? logic[i].params : logic[i].handler.toString().substring(logic[i].handler.toString().indexOf('(')+1, logic[i].handler.toString().indexOf(')')).split(/\W+/);
-				id = typeof logic[i].id == 'number'? logic[i].id : params.lastIndexOf('id')>-1? params.lastIndexOf('id') : 0;
-
 				this.indices.logic[i] = {
 					params: params,
-					id:id,
 					start: pos,
-					end: pos + params.length,
-					check: pos + id
+					end: pos + params.length
 				};
 				pos += params.length;
 				this.selector.push(logic[i].exp);
 			}
-
+			// save the match index of the closer
 			this.indices.closer = pos;
 			pos ++;
+			// save the first match index of closing id's
 			this.indices.id = pos;
+
 			// split pattern into opener, divider & closer
 			for(i = 0; i < pattern.length; i++){
 				if((match = pattern[i].match(nested) || pattern[i].match(single)) && match[1] && match[3]){
@@ -350,11 +362,12 @@ window.Mask = window.Mask ||  (function(){
 					this.closer.push(this.esc(match[3]));
 					if(match[2]){
 						this.divider.push(this.esc(match[2]));
+						this.closer.push(this.esc(match[2]));
 					}
-//					if(match[4]){
-//						this.indices.id.push(pos);
-//						pos++;
-//					}
+					if(match[4]){
+						pos++;
+					}
+
 				}
 			}
 		},
@@ -365,23 +378,22 @@ window.Mask = window.Mask ||  (function(){
 		 */
 		getMarker: function(match){
 			var logic = this.options.logic,
-				indices = this.indices.logic,
-				i;
+				indices = this.indices.logic;
 
-			for(i=0; i<logic.length; i++){
-				if(typeof match[indices[i].check] !== 'undefined'){
+			for(var i= 0, p; i<logic.length; i++){
+				if((p = match.slice(indices[i].start, indices[i].end)).join('')){
 					return {
-						logic:logic[i].handler,
-						params:match.slice(indices[i].start, indices[i].end),
-						id:match[indices[i].check],
-						i:match.index,
-						j:match.index+match[0].length,
+						logic:i,
+						params:p,
+						id:p[0], // use the first param of the selector as default
+						start:match.index,
+						end:match.index+match[0].length,
 						opened:match[0],
 						nested:[]
 					};
 				}
 			}
-			return false;
+			return null;
 		},
 
 		// escape regexp chars //TODO: test if the escaping of  "-" is correct

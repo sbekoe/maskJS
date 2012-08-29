@@ -93,6 +93,7 @@
 			console.log('### log current unit test ###');
 			console.log(lmask = mask);
 			console.log(ltokenizer = mask.tokenizer);
+			console.log(JSON.stringify(mask.tokenizer.indices))
 			console.log('result:\n'+(lresult = out));
 		}
 		equal(out,test.result,test.name);

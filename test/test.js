@@ -91,10 +91,11 @@
 				.toggleClass('pass',success)
 				.toggleClass('fail',!success);
 			console.log('### log current unit test ###');
-			console.log(lmask = mask);
-			console.log(ltokenizer = mask.tokenizer);
-			console.log(JSON.stringify(mask.tokenizer.indices))
-			console.log('result:\n'+(lresult = out));
+			console.log('# Mask\n',lmask = mask);
+			console.log('# Tokenizer\n',ltokenizer = mask.tokenizer);
+			console.log('# detector\n',JSON.stringify(mask.tokenizer.detector));
+			console.log('# indices\n',JSON.stringify(mask.tokenizer.indices));
+			console.log('# result\n',(lresult = out));
 		}
 		equal(out,test.result,test.name);
 	}

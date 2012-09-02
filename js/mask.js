@@ -5,7 +5,7 @@
  * @version $Id$
  */
 
-window.Mask = window.Mask ||  (function(){
+window.Mask = window.Mask ||  (function(window, doument, undefined){
 	"use strict";
 	// default options
 	var defaults = {
@@ -64,33 +64,41 @@ window.Mask = window.Mask ||  (function(){
 			if (!isArray(data)) {
 				data = [data];
 			}
-			var tokens = arguments[1] || this.tokens,
-				res = [],
-				l = data.length,
-				s = this.tokenizer.options.logic,
-				d, i, m, t, pos, marker;
-			this.scope[0].length = l;
+			var tokens = arguments[1] || this.tokens, 	// a peace of compiled template
+				result = [], 								// array of strings
+				length = data.length,
+				logic = this.tokenizer.options.logic,
+				marker, pos, d, i, m;
+			this.scope[0].length = length;
 			// iterate trough data
-			for(i = 0; i<l;i++){
+			for(i = 0; i<length;i++){
 				if(data[i]!==null && typeof data[i] !== 'undefined'){
 					this.scope.push(data[i]);
 					this.scope[0].i = i;
 					// iterate trough the markers of the current template
 					for(m in tokens.marker){if(tokens.marker.hasOwnProperty(m)){
+						// get the default data associated with the name m
 						d = this.scope.find(m);
 						// iterate trough the positions the current marker should be inserted at
 						for(pos in tokens.marker[m]){if(tokens.marker[m].hasOwnProperty(pos)){
 							marker = tokens.marker[m][pos];
-							d = s[marker.logic].handler? s[marker.logic].handler.apply({scope:this.scope, data:d, length:l, i:i}, marker.params) : d;
-							t = typeof d;
-							tokens.template[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
+							// use a given data handler instead of the default data
+							d = logic[marker.l].handle? logic[marker.l].handle.apply({scope:this.scope, data:d, length:length, i:i}, marker.params) : d;
+							switch(typeof d){
+								case 'string':
+								case 'number': tokens.template[pos] = d; break;
+								case 'object': tokens.template[pos] = logic[marker.l].render? logic[marker.l].render.call(this, d, marker.nested) : this.render(d,marker.nested); break;
+								case 'function': tokens.template[pos] = d.call(this, marker); break;
+								default: tokens.template[pos] = '';
+							}
+							//tokens.template[pos] = t === 'object'? this.render(d,marker.nested) : t==='function'? d.call(this,i,m) : d;
 						}}
 					}}
-					res = res.concat(tokens.template);
+					result = result.concat(tokens.template);
 					this.scope.pop();
 				}
 			}
-			return res.join('');
+			return result.join('');
 		},
 
 
@@ -131,56 +139,27 @@ window.Mask = window.Mask ||  (function(){
 		 */
  		compile: function(template){
 			if(!template){
-				return [];
+				return {};
 			}
-			var last = this.tokenizer.detect.lastIndex = 0,
-				t = this.tokenizer,
-				count = 0,
-//				tokens = [],
+			var t = this.tokenizer,
+				logic = t.options.logic,
 				tokens = {template:[], marker:{}, partial:{}},
-				m,
-				match,id, closed = false;
-//			tokens.marker = {};
-			while((match = t.detect.exec(template)) !== null || count){
-
-				// found opening marker
-				if(match && match[1]){
-					// get marker instance if there are no previous unclosed markers
-					if(count === 0){
-						m = t.getMarker(match); // marker itself
+				scope = {count:0, last:0, next:0, m:{}, d: new RegExp(t.detector,'gm')},
+				m;
+			//*
+			while(m=this.tokenizer.parse(template,scope)){
+				if(m.closed === true){
+					if(m.type == 'nested'){
+						m.nested = logic[m.l].compile? logic[m.l].compile.call(this, template, m, tokens, scope) : this.compile(template.slice(m.inner[0], m.inner[1]));
 					}
-					// remember: one more marker is opened
-					count++;
-				}
-
-				// found closing marker
-				else if(m && match && match[t.indices.closer]){
-					// get the closing id if available
-					id = id=match.slice(t.indices.id).join('');
-					// check if the number of opened markers matches the number of closed markers and check available closing id against the opening id
-					if(count === 1 && (!id || m.params.indexOf(id)>-1)){
-						m.id = id || m.id;
-						// nested templates are handled recursive. if the current marker has no nested template, [] is stored.
-						m.nested = this.compile(template.slice(m.end,match.index));
-						closed = true;
-					}
-					// remember one marker less is opened
-					if(count>0){count--;}
-				}
-
-				if(closed || !match){
-					tokens.template.push(template.slice(last, m.start),'');
+					tokens.template.push(template.slice(scope.last, m.outer[0]),'');
 					// if no markers are detected until now, create an object for them
-					if(!tokens.marker[m.id]){tokens.marker[m.id] = {};}
+					tokens.marker[m.id] = tokens.marker[m.id] || {};
 					// associate position & template with marker.
 					tokens.marker[m.id][tokens.template.length-1] = m;
-					// update the expression index for the next loop
-					this.tokenizer.detect.lastIndex = last = match? match.index + match[0].length : m.end;
-					closed = false;
-					count = 0;
 				}
 			}
-			tokens.template.push(template.slice(last));
+			tokens.template.push(template.slice(scope.next));
 			return tokens.template.length? tokens : this.tokens;
 		}
 	};
@@ -242,7 +221,7 @@ window.Mask = window.Mask ||  (function(){
 				exp: /(\{\{\s*|\{\{\s*)(\w+)(?:\s*:)?|(\s*\}\}|\s*\}\})/g
 			},*/
 			html:{
-				detect: /(\{\{|(?:^[ \t]*)?<!\-\-[ \t]*)(?:(\w+(?:\.\w+)*)(?:(==|!=|<|>|<=|>=)(\w+(?:\.\w+)*))?\?(\w+(?:\.\w+)*)(?:\:(\w+(?:\.\w+)*))?|(\w+(?:\.\w+)*))(?:[ \t]*\-\->(?:[ \t]*\n)?)?|(\}\}|(?:^[ \t]*)?<!\-\-[ \t]*\/(\w+(?:\.\w+)*)[ \t]*\-\->(?:[ \t]*\n)?|[ \t]*\-\->(?:[ \t]*\n)?)/gm,
+				detector: "(\\{\\{|(?:^[ \\t]*)?<!\\-\\-[ \\t]*)(?:(\\w+(?:\\.\\w+)*)(?:(==|!=|<|>|<=|>=)(\\w+(?:\\.\\w+)*))?\\?(\\w+(?:\\.\\w+)*)(?:\\:(\\w+(?:\\.\\w+)*))?|(\\w+(?:\\.\\w+)*))(?:[ \\t]*\\-\\->(?:[ \\t]*\\n)?)?|(\\}\\}|(?:^[ \\t]*)?<!\\-\\-[ \\t]*\\/(\\w+(?:\\.\\w+)*)[ \\t]*\\-\\->(?:[ \\t]*\\n)?|[ \\t]*\\-\\->(?:[ \\t]*\\n)?)",
 				indices:{"opener":1,"closer":8,"logic":[{"params":["comp1","rel","comp2","id","els"],"id":3,"start":2,"end":7,"check":5},{"params":[""],"id":0,"start":7,"end":8,"check":7}],"id":9,"i":2}
 			},
 			js:{
@@ -276,7 +255,15 @@ window.Mask = window.Mask ||  (function(){
 				['%w', '\\w+']					// word
 			],
 			logic:[
-				{exp: '(%ns)(?:(==|!=|<|>|<=|>=)(%ns))?\\?(%ns)(?:\\:(%ns))?', handler:function(comp1, rel, comp2, id, alt){
+				/* possible attributes, methods are optional
+				{
+					exp:'',
+					handle:function(){ return {};},
+					render:function(data, tokens){ return '';}, // context: Mask template
+					compile:function(template, marker, tokens, scope){ return {};} // context: Mask template
+				},
+				//*/
+				{exp: '(%ns)(?:(==|!=|<|>|<=|>=)(%ns))?\\?(%ns)(?:\\:(%ns))?', handle:function(comp1, rel, comp2, id, alt){
 					var _id = this.scope.find(id),
 						_v1 = this.scope.find(comp1),
 						v1 = _v1 || comp1,
@@ -292,7 +279,7 @@ window.Mask = window.Mask ||  (function(){
 						default: return _v1? _id : v4;
 					}
 				}},
-				{exp: '(%ns)', handler:false}
+				{exp: '(%ns)', handle:false}
 			]
 		},
 
@@ -301,8 +288,8 @@ window.Mask = window.Mask ||  (function(){
 			options = typeof options ==='object'? options : this.presets[options] || this.presets['html'];
 
 			this.options = extend({},this.defaults,this.defaults[options.presets]||{},options,true);
-			if(options.detect){
-				this.detect = this.options.detect;
+			if(options.detector){
+				this.detector = this.options.detector;
 				this.indices = this.options.indices;
 				return;
 			}
@@ -327,7 +314,7 @@ window.Mask = window.Mask ||  (function(){
 			for(i=0;i<wc.length;i++){
 				exp = exp.replace(new RegExp(wc[i][0],'g'), wc[i][1]);
 			}
-			this.detect = new RegExp(exp, 'gm');
+			this.detector = exp;
 		},
 
 		analyse: function(){
@@ -340,7 +327,7 @@ window.Mask = window.Mask ||  (function(){
 
 			// build the selector regexp part
 			for(i=0; i< logic.length; i++){
-				params = logic[i].params? logic[i].params : logic[i].handler.toString().substring(logic[i].handler.toString().indexOf('(')+1, logic[i].handler.toString().indexOf(')')).split(/\W+/);
+				params = logic[i].params? logic[i].params : logic[i].handle.toString().substring(logic[i].handle.toString().indexOf('(')+1, logic[i].handle.toString().indexOf(')')).split(/\W+/);
 				this.indices.logic[i] = {
 					params: params,
 					start: pos,
@@ -371,6 +358,51 @@ window.Mask = window.Mask ||  (function(){
 				}
 			}
 		},
+		parse:function(template, scope){
+			var match, m = scope.m, id;
+			if((match = scope.d.exec(template)) !== null || scope.count){
+				// found opening marker
+				if(match && match[this.indices.opener]){
+					// get marker instance if there are no previous unclosed markers
+					if(scope.count === 0){
+						m = scope.m = this.getMarker(match); // marker itself
+						m.status = 'opened';
+					}
+					// remember: one more marker is opened
+					scope.count++;
+				}
+	
+				// found closing marker
+				else if(m.status === 'opened' && match && match[this.indices.closer]){
+					// get the closing id if available
+					id = match.slice(this.indices.id).join('');
+					// check if the number of opened markers matches the number of closed markers and check available closing id against the opening id
+					if(scope.count === 1 && (!id || m.params.indexOf(id)>-1)){
+						m.id = id || m.id;
+						m.type = 'nested';
+						m.inner[1] = match.index;
+						m.outer[1] = match.index + match[0].length;
+						m.status = 'done';
+					}
+					// remember one marker less is opened
+					if(scope.count>0){scope.count--;}
+				}
+	
+				if(m.status === 'done' || !match){
+					m.closed = true;
+					m.status = 'closed';
+					scope.count = 0;
+					// update the expression index for the next loop
+					scope.last = scope.next;
+					scope.d.lastIndex = scope.next = match? m.outer[1] : m.end;
+				}else{
+					m.closed = false;
+				}
+				return m; // return the marker object while parsing is still in progress
+			}else{
+				return null;
+			}
+		},
 		/**
 		 * prepare a match
 		 * @param match
@@ -380,21 +412,26 @@ window.Mask = window.Mask ||  (function(){
 			var logic = this.options.logic,
 				indices = this.indices.logic;
 
-			for(var i= 0, p; i<logic.length; i++){
+			for(var i= 0, p, s, e; i<logic.length; i++){
 				if((p = match.slice(indices[i].start, indices[i].end)).join('')){
 					return {
-						logic:i,
+						l:i, 								// index of the logic selector
 						params:p,
-						id:p[0], // use the first param of the selector as default
+						id:p[0],							// use the first param of the selector as default
 						start:match.index,
 						end:match.index+match[0].length,
+						inner:[match.index+match[0].length],
+						outer:[match.index,match.index+match[0].length],
 						opened:match[0],
-						nested:[]
+						nested:[],
+						type:'single',						// can be single or nested. single is the default  
+						closed:false
 					};
 				}
 			}
 			return null;
 		},
+
 
 		// escape regexp chars //TODO: test if the escaping of  "-" is correct
 		esc: function (str) {
@@ -434,4 +471,4 @@ window.Mask = window.Mask ||  (function(){
 		return o;
 	};
 	return Mask;
-})();
+})(window, document);

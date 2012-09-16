@@ -1,5 +1,6 @@
 (function($){
-	CodeMirror.modeURL = "vendor/CodeMirror2/mode/%N/%N.js";
+	var BASE = 'http://local.maskjs/test/';
+	CodeMirror.modeURL = BASE +"vendor/CodeMirror2/mode/%N/%N.js";
     $(function(){
         $('.test textarea').keyup(updateCurrentTest);
 
@@ -14,7 +15,7 @@
 			CodeMirror.autoLoadMode(editorR, mode);
 			updateCurrentTest();
 		});
-		jQuery.getJSON('tests.json',{},init);
+		jQuery.getJSON(BASE + 'tests.json',{},init);
     });
 
 	jQuery.fn.codemirror = function(options){
@@ -44,7 +45,8 @@
 			lineNumbers:true,
 			onKeyEvent: function(editor,event){
 				if(event.type=='keyup'){updateCurrentTest();}
-			}
+			},
+			smartIndent:false
 		});
 		if(tests.length){
 			load(tests[tests.length-1]);
@@ -93,9 +95,9 @@
 			console.log('### log current unit test ###');
 			console.log('# Mask\n',lmask = mask);
 			console.log('# Tokenizer\n',ltokenizer = mask.tokenizer);
-			console.log('# detector\n',JSON.stringify(mask.tokenizer.detector));
-			console.log('# indices\n',JSON.stringify(mask.tokenizer.indices));
-			console.log('# result\n',(lresult = out));
+			console.log('# Parser\n',JSON.stringify(mask.tokenizer.parser));
+			console.log('# Captures\n',JSON.stringify(mask.tokenizer.captures));
+			console.log('# Result\n',(lresult = out));
 		}
 		equal(out,test.result,test.name);
 	}

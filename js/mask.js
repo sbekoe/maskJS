@@ -205,8 +205,22 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				captures = this.captures,
 				single = new RegExp('^(.+)' + '%logic' + '()(.*)$'),
 				nested = new RegExp('^(.+)' +  '%logic' + '(?:(.*)' + '%tmp' + ')(.+(%id).*|.+)$'),
+				parts = new Exp({
+					source: /^#delimiterL\%logic(?:#delimiterR#nested)#closer|#delimiterL\%logic#delimiterR?$/,
+					wildcards:{
+						//opener:/#delimiterL\%logic#delimiterR/,
+						closer:/.+#id.*|.+/,
+						id:/\%id/,
+						nested:'\%tmp',
+						delimiterL:/.+/,
+						delimiterR:/.+/
+					}
+				}),
 				index = 2, // The position of the current capture. Starting at 2: 0 for the whole expression 1 for the opener
 				markerOrder = [], patternOrder = [], match,  opener, closer, params, i, p, m, t;
+			var exp = /#opener|#closer/gm,
+				wildcards = {opener:'#delimeterL#logic#delimiterR', divider:[], closer:[], delimiterL:[], delimiterR:[]},
+				part;
 
 			// sort patterns
 			for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); }}
@@ -216,7 +230,11 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			// split token into opener, divider & closer
 			for(i=0; i<patternOrder.length; i++){
 				p = pattern[patternOrder[i]];
+				console.log(part = parts.exec(p.token));
 				if(p.token && (match = p.token.match(nested) || p.token.match(single)) && match[1] ){//&& match[3]){
+					part.$delimiterL? wildcards.delimiterL.push(Exp.esc(part.$delimiterL)) : '';
+					part.$delimiterR? wildcards.delimiterR.push(Exp.esc(part.$delimiterR)) : '';
+					part.$delimiterR? (wildcards.closer.push(Exp.esc(part.$delimiterR) + (part.$closer_id? ('|' + Exp.esc(part.$closer)) : ''))) : '';
 					opener = '(' + this.esc(match[1]) + ')';
 					closer = this.esc(match[3]);
 					t = p.type || (!match[2]? 'single' : match[4]? 'auto' : 'nested');
@@ -542,8 +560,9 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		};
 	return Mask;
 }(window, document));
-// include expJS 0.2
-var Exp = function(){function a(a,b,c){var d=c||{};this.source=a.source||a;this.global=a.global||d.g;this.ignoreCase=a.ignoreCase||d.i;this.multiline=a.multiline||d.m;this.flags=d.flags||"";this.wildcards=b||{};this.lastIndex=d.lastIndex||0;this.secondLastIndex=d.secondLastIndex||0;this._exp=/^$/;this._captures=d.captures||["$$full"];this.prefix=d.prefix||"$";this.expCache=d.expCache||true;this.execCache=d.execCache||false;this.defaultMatch=d.defaultMatch||null;this.debug=d.debug||false;this.compile(d.captures)}"use strict";a.prototype={compile:function(){this._exp=new RegExp(this._captures.length>1?this.source:this.build(),this.flags||a.flags(this))},build:function(){var a=this.wildcards,b,c=[],d=this.source,e,f,g,h;for(h in a){if(a.hasOwnProperty(h)){c.push(h)}}b=new RegExp("\\\\(%|>)|(%|>)("+c.join("|")+")","g");do{g=false;e=b.exec(d);if(e){if(e[1]){g=true;continue}if(a[e[3]]){g=true;f=a[e[3]].join?a[e[3]].join("|"):a[e[3]];if(e[2]===">"){f="("+f+")";this._captures.push(this.prefix+e[3])}b.lastIndex=e.index;d=d.slice(0,e.index)+f+d.slice(e.index+e[0].length)}else{this.error('Undefined wildcard "'+e[3]+'": [...] '+d.slice(e.index-5,e.index+e[0].length+5)+" [...]")}}}while(g===true);return d.replace(/\\(%|>)/g,"$1")},exec:function(a){var b,c,d=this._captures;this._exp.lastIndex=this.secondLastIndex=this.lastIndex;if(b=this._exp.exec(a)){this.lastIndex=this._exp.lastIndex;for(c=0;c<d.length;c++){switch(typeof b[d[c]]){case"string":b[d[c]]=[b[d[c]],b[c]];break;case"object":b[d[c]].push(b[c]);break;default:b[d[c]]=b[c]}}}return b||this.defaultMatch},test:function(a){return this._exp.test(a)},scan:function(a,b){var c=[],d;this.lastIndex=0;while(d=this.exec(a)){c.push(b?b.call(this,d):d)}return c},error:function(a){if(this.debug===true){throw a}}};a.esc=function(a){return a.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|%>]/g,"\\$&")};a.replaceWildcards=function(a,b){var c,d;do{d=a;for(c in b){if(b.hasOwnProperty(c)){a.replace(new RegExp("(?:%|>)\\w+","g"),b[c])}}}while(d!==a);return a};a.flags=function(a){var b="";if(a.global){b+="g"}if(a.ignoreCase){b+="i"}if(a.multiline){b+="m"}return b};return a}();
+
+// expJS - https://gist.github.com/3726969
+//var Exp=function(){function g(a,b){b=b||a||{};this.source=a.source||a;this.global=a.global||b.global;this.ignoreCase=a.ignoreCase||b.ignoreCase;this.multiline=a.multiline||b.multiline;this.flags=b.flags||"";this.wildcards=b.wildcards||{};this.defaultMatch=b.defaultMatch||null;this.lastIndex=b.lastIndex||0;this.lastRange=[0,0];this.compile(b)}g.prototype={compile:function(a){var b=[],c=[],f=[],h=["#","%"],g=this.wildcards,a=a||{},d;for(d in g)g.hasOwnProperty(d)&&("#"===d[0]&&(d=d.slice(1),f.push(d), h.push(d)),"%"===d[0]&&(d=d.slice(1),c.push(d),h.push(d)),b.push(d));this._captures=a.captures||["$"];this._escaped=h;this._needle=RegExp("\\\\("+h.join("|")+")|(#|%)("+b.join("|")+")|("+(f.join("|")||"$^")+")|("+(c.join("|")||"$^")+")","g");this._exp=RegExp(1<this._captures.length?this.source:this.build(this.source,this._captures),this.flags||(this.global?"g":"")+(this.ignoreCase?"i":"")+(this.multiline?"m":""))},build:function(a,b,c){for(var f=this.wildcards,h=this._needle,g=this._escaped,c=c|| [],d=[],k=h.lastIndex=0,j,l,e,i;e=h.exec(a);)if(i=f[e[3]]||f["#"+e[4]]||f["%"+e[5]])l="#"===e[2]||"undefined"!==typeof e[4],j=e[3]||e[4]||e[5],-1===c.indexOf(j)?c.push(j):this.error('"'+j+'" includes itself. This would end up in infinity recursion loop!'),l&&b.push("$"+c.join("_")),i=(l?"(":"(?:")+this.build(i.source||(i.join?i.join("|"):i),b,c)+")",d.push(a.slice(k,e.index),i),h.lastIndex=k=e.index+e[0].length,c.pop();d.push(a.slice(k));return d.join("").replace(RegExp("\\\\("+g.join("|")+")","g"), "$1")},exec:function(a){var b,c=this._captures;this._exp.lastIndex=this.lastIndex;if(a=this._exp.exec(a)){this.lastIndex=this._exp.lastIndex;a.lastRange=this.lastRange;a.range=this.lastRange=[a.index,this._exp.lastIndex];for(b=0;b<c.length;b++)switch(typeof a[c[b]]){case "string":a[c[b]]=[a[c[b]],a[b]];break;case "object":a[c[b]].push(a[b]);break;default:a[c[b]]=a[b]}}return a||this.defaultMatch},test:function(a){return this._exp.test(a)},scan:function(a,b){var c=[],f;this.lastIndex=0;if(this.global)for(;f= this.exec(a);)c.push(b ? b.call(this, f) : f); return c }, expand:function (a) { return this.build(a, []) }, error:function (a) { throw"Error in Expression /"+this.source+"/: "+a;}};g.esc=function(a){return a.replace(RegExp("[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|%#]","g"),"\\$&")};g.version="0.4";return g}();
 
 Mask.configure('defaults',{
 	marker:{

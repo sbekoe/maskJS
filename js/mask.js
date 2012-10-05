@@ -206,10 +206,9 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				single = new RegExp('^(.+)' + '%logic' + '()(.*)$'),
 				nested = new RegExp('^(.+)' +  '%logic' + '(?:(.*)' + '%tmp' + ')(.+(%id).*|.+)$'),
 				parts = new Exp({
-					source: /^#delimiterL\%logic(?:#delimiterR#nested)#closer|#delimiterL\%logic#delimiterR?$/,
+					source: "^#delimiterL\\%logic(?:#delimiterR#nested)#closer|#delimiterL\\%logic#delimiterR?$",
 					wildcards:{
-						//opener:/#delimiterL\%logic#delimiterR/,
-						closer:/.+#id.*|.+/,
+						closer:{source:".+#id.*|.+"},
 						id:/\%id/,
 						nested:'\%tmp',
 						delimiterL:/.+/,
@@ -219,7 +218,11 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				index = 2, // The position of the current capture. Starting at 2: 0 for the whole expression 1 for the opener
 				markerOrder = [], patternOrder = [], match,  opener, closer, params, i, p, m, t;
 			var exp = /#opener|#closer/gm,
-				wildcards = {opener:'#delimeterL#logic#delimiterR', divider:[], closer:[], delimiterL:[], delimiterR:[]},
+//				wildcards = extend({}, this.mask.options.wildcards, {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[], id:'#ns'}),
+				wildcards = extend(
+					{"id":"ns","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+"},
+					{opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
+				),
 				part;
 
 			// sort patterns
@@ -230,11 +233,18 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			// split token into opener, divider & closer
 			for(i=0; i<patternOrder.length; i++){
 				p = pattern[patternOrder[i]];
-				console.log(part = parts.exec(p.token));
-				if(p.token && (match = p.token.match(nested) || p.token.match(single)) && match[1] ){//&& match[3]){
-					part.$delimiterL? wildcards.delimiterL.push(Exp.esc(part.$delimiterL)) : '';
-					part.$delimiterR? wildcards.delimiterR.push(Exp.esc(part.$delimiterR)) : '';
-					part.$delimiterR? (wildcards.closer.push(Exp.esc(part.$delimiterR) + (part.$closer_id? ('|' + Exp.esc(part.$closer)) : ''))) : '';
+				// new
+				if (p.token && (part = parts.exec(p.token))) {
+					if (part['$delimiterL'][0]) { wildcards.delimiterL.push(Exp.esc(part.$delimiterL[0],true)); }
+					if (part['$delimiterR'][0]) { wildcards.delimiterR.push(Exp.esc(part['$delimiterR'][0],true)); }
+					if (part['$closer'][0] || part['$delimiterR'][0]) {
+						wildcards.closer.push(
+							Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : ''));
+					}
+				}
+
+				// old
+				if(p.token && (match = p.token.match(nested) || p.token.match(single)) && match[1] ){
 					opener = '(' + this.esc(match[1]) + ')';
 					closer = this.esc(match[3]);
 					t = p.type || (!match[2]? 'single' : match[4]? 'auto' : 'nested');
@@ -255,6 +265,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 //					if(match[4]){ pos++; }
 				}
 			}
+//			console.log(wildcards);
 
 			for(m in marker){if(marker.hasOwnProperty(m)){ markerOrder.push(m); }}
 			markerOrder.sort(function(l1,l2){
@@ -272,6 +283,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				};
 				index += params.length;
 				this.logic.push(m.exp);
+				wildcards.logic.push(m.exp);
 			}
 			// save the match index of the closer
 			this.captures.singleCloser = index;
@@ -282,17 +294,23 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			// save the first match index of closing id's
 			this.captures.id = index;
 			this.captures.length = index + 1;
-
-
+			this.exp = new Exp(exp,{wildcards:wildcards});
+			//console.log(exp, parts,wildcards, this.exp);
 		},
+
 		parse2: function(template){
 			var parser = new RegExp(this.parser,'gm'),
+				tokens2,
 				tokens = [], // the lexical tokens stream
 				tree = {}, // the parse tree,
 				objects = [],
+				objects2 = [],
 				match,
 				i = 0, o, level;
-
+			if(this.exp) console.log(tokens2 = this.exp.scan(template, function(match, tokens){
+				//tokens.push(template)
+				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1);
+			}), objects2);
 			// Lexical analysis (scanner)
 			while(match = parser.exec(template)){
 				tokens.push('text ' + (objects.push(template.slice(i,match.index))-1)); // add prepended text
@@ -323,7 +341,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					m2 = this.getMarker(match);
 					scope.p.lastIndex = m2.outer[1];
 					if(m2.type === 'nested') scope.m2.push(m2);
-//					m2 = this.getMarker(match);
+					//m2 = this.getMarker(match);
 					if(scope.c === 0){
 						m = scope.m = this.getMarker(match); // marker itself
 						if(m.open(match)){scope.count++; scope.c++;} // check if the match describes a valid opener. m.status should be 'opened' in this case

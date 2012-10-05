@@ -1,7 +1,7 @@
 /**
  * expJS - modular expressions
  * @author Simon Bekoe
- * @version 0.4
+ * @version 0.5
  * https://gist.github.com/3726969
  * http://jsbin.com/ogokog/20/edit
  *

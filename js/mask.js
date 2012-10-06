@@ -223,7 +223,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					{"id":"ns","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+"},
 					{opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
 				),
-				part;
+				part,id;
 
 			// sort patterns
 			for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); }}
@@ -238,8 +238,11 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					if (part['$delimiterL'][0]) { wildcards.delimiterL.push(Exp.esc(part.$delimiterL[0],true)); }
 					if (part['$delimiterR'][0]) { wildcards.delimiterR.push(Exp.esc(part['$delimiterR'][0],true)); }
 					if (part['$closer'][0] || part['$delimiterR'][0]) {
-						wildcards.closer.push(
-							Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : ''));
+						wildcards[id = _.uniqueId(patternOrder[i])] = {
+							source:Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : ''),
+							assign:{pattern:patternOrder[i]}
+						};
+						wildcards.closer.push('#' + id);
 					}
 				}
 
@@ -307,9 +310,9 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				objects2 = [],
 				match,
 				i = 0, o, level;
-			if(this.exp) console.log(tokens2 = this.exp.scan(template, function(match, tokens){
+			if(this.exp) console.log(this.exp, tokens2 = this.exp.scan(template, function(match, tokens){
 				//tokens.push(template)
-				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1);
+				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1) + ((' ' + match.pattern)||'');
 			}), objects2);
 			// Lexical analysis (scanner)
 			while(match = parser.exec(template)){

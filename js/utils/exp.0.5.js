@@ -95,7 +95,7 @@ var Exp = (function(){
 			this._captures = settings.captures || [''];
 			this._assignments = {};
 			this._escaped = escaped;
-			this._needle = new RegExp('\\\\(' + escaped.join('|') + ')|(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + names.join('|') + ')|(' + (captures.join('|')||'$^') + ')|(' + (injections.join('|')||'$^') + ')','g');
+			this._needle = new RegExp('\\\\(' + escaped.join('|') + ')|\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.join('|')||'$^') + ')|(' + (captures.join('|')||'$^') + ')|(' + (injections.join('|')||'$^') + ')','g');
 			this._exp = new RegExp(
 				this._captures.length>1?this.source : this.build(this.source, this._captures, this._assignments),
 				this.flags || ((this.global? 'g' : '') + (this.ignoreCase? 'i' : '') + (this.multiline? 'm' : ''))
@@ -106,11 +106,14 @@ var Exp = (function(){
 		 * Build the expression string with replaced wildcards
 		 * @param {String} source
 		 * @param {Array} captures Filled with the names
+		 * @param {Object} assignments Filled with the names
 		 * @param {Array} [namespace] used internal for recursive call
 		 * @return {String} native RegExp source
 		 */
 		build: function(source, captures, assignments, namespace){
-			var wc = this.wildcards,
+			var
+				source = isArray(source)? source : [source],
+				wc = this.wildcards,
 				needle = this._needle, // regexp to detect the (escaped) special characters.
 				escaped = this._escaped,
 				namespaces = namespaces || {},
@@ -126,31 +129,38 @@ var Exp = (function(){
 				isCapture,
 				match,
 				// the expression that replaces the keyword
-				replacement;
-			if(!source){this.error('Empty Expression. Check the source or the "' + namespace[namespace.length-1] + '"wildcard');}
-			while(match = needle.exec(source)) {
-				// do nothing if an escaped characters was detected, but on captures and injections
-				if (replacement = wc[match[3]] || wc[CAPTURE_PREFIX + match[4]] || wc[INJECTION_PREFIX + match[5]]) {
-					// check if the the keyword is a capture
-					isCapture = match[2] === CAPTURE_PREFIX || typeof match[4] !== 'undefined';
-					keyword = match[3] || match[4] || match[5];
-					// check for infinity recursion and add the current keyword to the namespace
-					namespace.indexOf(keyword) === -1? namespace.push(keyword) : this.error('"'+ keyword + '" includes itself. This would end up in infinity recursion loop!');
-					ns = namespace.join(ATTRIBUTE_DELIMITER);
-					// store the keyword in the captures array if necessary
-					if(isCapture){ captures.push(ns); }
-					if(typeof replacement.assign !== 'undefined'){ assignments[ns] = replacement.assign; }
-					// build the replacement recursive and wrap it with ( ) for capturing or (?: ) for injection
-					replacement = (isCapture ? '(' : '(?:') + this.build(replacement.source || (replacement.join ? replacement.join('|') : replacement), captures, assignments, namespace) + ')';
-					// add the prepended native expression string and the replacement to the compiled expression
-					exp.push(source.slice(lastIndex, match.index), replacement);
-					// set the needles index back to
-					needle.lastIndex = lastIndex = match.index + match[0].length;
-					namespace.pop();
+				replacement,
+				openers,
+				i,src;
+			for(i=0; i<source.length; i++){
+				src = source[i].s || source[i].source || source[i];
+				if(!src){this.error('Empty Expression. Check the source or the "' + namespace[namespace.length-1] + '"wildcard');}
+				// disjunction of source elements
+				if(i>0){exp.push('|')}
+				while(match = needle.exec(src)) {
+					// do nothing if an escaped characters was detected, but on captures and injections
+					if (replacement = wc[match[5]] || wc[CAPTURE_PREFIX + match[6]] || wc[INJECTION_PREFIX + match[7]]  || (match[2]? {s:findClosedReplacement(src.slice(needle.lastIndex)), a:source[i].a||source[i].assign} : false)) {
+						// check if the the keyword is a capture
+						isCapture = match[2] === CAPTURE_PREFIX || match[4] === CAPTURE_PREFIX || typeof match[6] !== 'undefined';
+						keyword = match[3] || match[5] || match[6] || match[7];
+						// check for infinity recursion and add the current keyword to the namespace
+						namespace.indexOf(keyword) === -1? namespace.push(keyword) : this.error('"'+ keyword + '" includes itself. This would end up in infinity recursion loop!');
+						ns = namespace.join(ATTRIBUTE_DELIMITER);
+						// store the keyword in the captures array if necessary
+						if(isCapture){ captures.push(ns); }
+						if(replacement.a || replacement.assign){ assignments[ns] = replacement.a || replacement.assign; }
+						// build the replacement recursive and wrap it with ( ) for capturing or (?: ) for injection
+						replacement = (isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')';
+						// add the prepended native expression string and the replacement to the compiled expression
+						exp.push(src.slice(lastIndex, match.index), replacement);
+						// set the needles index back to
+						needle.lastIndex = lastIndex = match.index + match[0].length + (match[2]? replacement.length - 1 : 0);
+						namespace.pop();
+					}
 				}
+				// add the appended native expression string to the compiled expression
+				exp.push(src.slice(lastIndex));
 			}
-			// add the appended native expression string to the compiled expression
-			exp.push(source.slice(lastIndex));
 
 			return exp.join('').replace(new RegExp('\\\\(' + escaped.join('|') + ')','g'),'$1'); // replace escaped characters
 		},
@@ -183,6 +193,7 @@ var Exp = (function(){
 					}
 				}
 			}
+			this.lastMatch = match || this.lastMatch;
 			return match || this.defaultMatch;
 		},
 		/**
@@ -200,17 +211,61 @@ var Exp = (function(){
 		 * @return {Array}
 		 */
 		scan: function(string,mapping){
-			var tokens = [], match;
-			this.lastIndex = 0;
-			if(this.global){ while(match = this.exec(string)){
-				tokens.push(mapping? mapping.call(this, match, tokens) : match);
-			}}
-			return tokens;
+			return Exp.scan(this, string, mapping);
 		},
 
-		expand: function(source){ return this.build(source, [],{}); },
-		error: function(msg){ if(DEBUG_MODE === true){ throw 'Error in Expression /' + this.source + '/: ' + msg;} }
+		expand: function(source){
+			return this.build(source, [],{});
+		},
+		error: function(msg){
+			if(DEBUG_MODE === true){
+				throw 'Error in Expression /' + this.source + '/: ' + msg;
+			}
+		}
 	};
+
+	/**
+	 * Returns an array containing all matches of the given string.
+	 * This makes only sence, if the global flag is true
+	 * @param {RegExp|Exp} exp
+	 * @param {String} string
+	 * @param {function(this:Exp,Array,Array): *} mapper the iterator function (optional)
+	 * @return {Array}
+	 */
+	Exp.scan = function(exp, string, mapper){
+		var tokens = [], token, match, lastIndex = exp.lastIndex;
+		exp.lastIndex = 0;
+		if(exp.global){ while(match = exp.exec(string)){
+			token = mapper? mapper.call(exp, match, tokens) : match;
+			if(token === Exp.breaker){break;}
+			else if(token !== Exp.skipper) tokens.push(token);
+		}}
+		// exp.lastIndex = lastIndex; // TODO: proof sense
+		return tokens;
+	}
+
+	Exp.search = function(exp, string, mapper){
+		var token, match, lastIndex = exp.lastIndex;
+		exp.lastIndex = 0;
+		if(exp.global){ while(match = exp.exec(string)){
+			token = mapper? mapper.call(exp, match) : match;
+			if(token !== Exp.skipper) return token;
+		}}
+		// exp.lastIndex = lastIndex; // TODO: proof sense
+		return null;
+	}
+
+	/**
+	 * return Exp.breaker in iterators to quit the iteration loop.(scan, search)
+	 * @type {Object}
+	 */
+	Exp.breaker = {};
+
+	/**
+	 * return Exp.skipper in iterators to skip the current iteration. E.g. the tokens returned by Exp.scan wouldn't contain the match on which the iterator returned the skipper.
+	 * @type {Object}
+	 */
+	Exp.skipper = {};
 
 	/**
 	 * escape all RegExp characters in the given string - even the advaced ones
@@ -223,12 +278,20 @@ var Exp = (function(){
 		return string.replace(new RegExp('[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|' + (nativeChars? '' : '%#') +']','g'), "\\$&");
 	};
 
+	Exp.s = function(exp, settings){return new Exp(exp,settings);};
+
 	Exp.version = '0.4';
 
 	// helper
-	function replace(string, namespace, wildcards){
-
+	function findClosedReplacement(string){
+		var opener = 1;
+		return Exp.search(/\(|\)|\\\(|\\\)/g,string,function(match){
+			if(match[0] === '('){opener++;}
+			if(match[0] === ')'){opener--;}
+			return opener === 0? string.slice(0,match.index) : Exp.skipper;
+		});
 	}
+	var isArray = Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';}
 
 return Exp;
 }());

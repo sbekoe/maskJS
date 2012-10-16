@@ -1,5 +1,5 @@
 (function($){
-	var BASE = 'http://localhost/maskJS/test/';
+	var BASE = 'http://local.maskjs/test/';
 	CodeMirror.modeURL = BASE +"vendor/CodeMirror2/mode/%N/%N.js";
     $(function(){
         $('.test textarea').keyup(updateCurrentTest);
@@ -60,7 +60,7 @@
 				if(tests[i].name===this.value) {load(tests[i])};
 			}
 		}).trigger('change');
-
+		module('maskJS')
 		test(this.url, function() {
 			for(var i=0; i<tests.length; i++){
 				runTest(tests[i]);
@@ -85,7 +85,6 @@
 
 
 	function runTest(test,log){
-		console.log(test.name)
 		var mask = Mask.t(test.template,evl(test.options)),
 			out = mask.render(evl(test.data)),
 			success = out==test.result;

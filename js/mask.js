@@ -100,6 +100,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			}
 			var t = this.tokenizer,
 				tokens = {template:[], marker:{}, partial:{}},
+				tokens2,
 				scope = {count:0, last:0,  m:{}, p:new RegExp(t.parser,'gm'), m2:[],i:0, c:0},
 				m;
 			while(m = this.tokenizer.parse(template, scope)){
@@ -113,6 +114,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					tokens.marker[m.id][tokens.template.length-1] = m.get();
 				}
 			}
+			tokens2 = this.tokenizer.parse2(template);
+			console.log(tokens2);
 			tokens.template.push(template.slice(scope.next));
 			return tokens.template.length? tokens : this.tokens;
 		}
@@ -235,7 +238,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				p = pattern[patternOrder[i]];
 				// new
 				if (p.token && (part = parts.exec(p.token))) {
-					if (part['$delimiterL'][0]) { wildcards.delimiterL.push(Exp.esc(part.$delimiterL[0],true)); }
+					if (part['$delimiterL'][0]) {
+						wildcards[id = _.uniqueId(patternOrder[i])] = {
+							source:Exp.esc(part.$delimiterL[0],true),
+							assign:{pattern:patternOrder[i]}
+						};
+						wildcards.delimiterL.push('#' + id);
+					}
 					if (part['$delimiterR'][0]) { wildcards.delimiterR.push(Exp.esc(part['$delimiterR'][0],true)); }
 					if (part['$closer'][0] || part['$delimiterR'][0]) {
 						wildcards[id = _.uniqueId(patternOrder[i])] = {
@@ -310,10 +319,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				objects2 = [],
 				match,
 				i = 0, o, level;
-			if(this.exp) console.log(this.exp, tokens2 = this.exp.scan(template, function(match, tokens){
-				//tokens.push(template)
-				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1) + ((' ' + match.pattern)||'');
-			}), objects2);
+			if(this.exp){
+				tokens2 = this.exp.scan(template, function(match, tokens){
+					tokens.push('text ' + (objects2.push(template.slice(match.lastRange[1], match.range[0]))-1));
+					return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1) + (' ' + (match.pattern || ''));
+				});
+				if(this.exp.lastMatch) tokens2.push('text ' + (objects2.push(template.slice(this.exp.lastMatch.lastRange[1]))-1));
+			}
 			// Lexical analysis (scanner)
 			while(match = parser.exec(template)){
 				tokens.push('text ' + (objects.push(template.slice(i,match.index))-1)); // add prepended text
@@ -327,7 +339,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				i = match.index + match[0].length;
 			}
 
-
+			console.log(tokens2,objects2, template);
 			return tokens.reverse().join('\\n');
 			tree.template = [];
 			tree.marker = {};
@@ -335,7 +347,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		},
 
 		parse:function(template, scope){
-			this.parse2(template);
+
 			var match, m = scope.m, id, m2 = scope.m2[scope.i];
 			if((match = scope.p.exec(template)) !== null || scope.count){
 				// found opening marker

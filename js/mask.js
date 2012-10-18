@@ -40,6 +40,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			this.tokenizer =  new Tokenizer(this);
 			this.scope = new Scope({},this.options.data);
 			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
+			var tokens2 = this.tokenizer.lexicalAnalyse(this.template);
 		},
 
 		/**
@@ -100,7 +101,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			}
 			var t = this.tokenizer,
 				tokens = {template:[], marker:{}, partial:{}},
-				tokens2,
 				scope = {count:0, last:0,  m:{}, p:new RegExp(t.parser,'gm'), m2:[],i:0, c:0},
 				m;
 			while(m = this.tokenizer.parse(template, scope)){
@@ -114,8 +114,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					tokens.marker[m.id][tokens.template.length-1] = m.get();
 				}
 			}
-			tokens2 = this.tokenizer.parse2(template);
-			console.log(tokens2);
+
+			//console.log(tokens2);
 			tokens.template.push(template.slice(scope.next));
 			return tokens.template.length? tokens : this.tokens;
 		}
@@ -223,7 +223,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			var exp = /#opener|#closer/gm,
 //				wildcards = extend({}, this.mask.options.wildcards, {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[], id:'#ns'}),
 				wildcards = extend(
-					{"id":"ns","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+"},
+					{"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+"},
 					{opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
 				),
 				part,id;
@@ -295,7 +295,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				};
 				index += params.length;
 				this.logic.push(m.exp);
-				wildcards.logic.push(m.exp);
+				wildcards.logic.push(m.exp2|| m.exp);
 			}
 			// save the match index of the closer
 			this.captures.singleCloser = index;
@@ -310,40 +310,35 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			//console.log(exp, parts,wildcards, this.exp);
 		},
 
-		parse2: function(template){
+		lexicalAnalyse: function(template){
 			var parser = new RegExp(this.parser,'gm'),
-				tokens2,
-				tokens = [], // the lexical tokens stream
+				tokens,
 				tree = {}, // the parse tree,
 				objects = [],
-				objects2 = [],
 				match,
-				i = 0, o, level;
-			if(this.exp){
-				tokens2 = this.exp.scan(template, function(match, tokens){
-					tokens.push('text ' + (objects2.push(template.slice(match.lastRange[1], match.range[0]))-1));
-					return (match['$opener'][0]? 'opener ' : 'closer ') + (objects2.push(match)-1) + (' ' + (match.pattern || ''));
-				});
-				if(this.exp.lastMatch) tokens2.push('text ' + (objects2.push(template.slice(this.exp.lastMatch.lastRange[1]))-1));
-			}
+				i = 0, o, level, stream;
 			// Lexical analysis (scanner)
-			while(match = parser.exec(template)){
-				tokens.push('text ' + (objects.push(template.slice(i,match.index))-1)); // add prepended text
-				if(match[this.captures.opener]){
-					o = this.getMarker(match);
-					tokens.push('opener ' + (objects.push(o)-1) + ' ' + o.type + ' ' + o.params.join(' ')); // add opener: "[token type] [object index] [type] [param1] [...] [paramN] "
-				}else if(match[this.captures.closer]){
-					o = {match:match, id: match.slice(this.captures.id).join('')};
-					tokens.push('closer '+ (objects.push(o)-1)); // add closer: "[token type] [object index]"
-				}
-				i = match.index + match[0].length;
-			}
-
-			console.log(tokens2,objects2, template);
-			return tokens.reverse().join('\\n');
+			tokens = this.exp.scan(template, function(match, tokens){
+				tokens.push('text ' + (objects.push(template.slice(match.lastRange[1], match.range[0]))-1));
+				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.$param.join(' ') || ''));
+			});
+			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.lastRange[1]))-1));
+			stream = this.stream = tokens.reverse().join('\n');
+			console.log(template)
+			console.log(stream)
+			console.log(objects)
+			return tokens;
 			tree.template = [];
 			tree.marker = {};
 			// semantic analyses
+		},
+		semanticAnalyse: function(parent){
+			var tree = parent.tree || {template:[], marker:{}},
+				stream = parent.stream || this.stream,
+				parser = /^(text|opener|closer) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm;
+
+
+
 		},
 
 		parse:function(template, scope){
@@ -518,7 +513,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			return Marker.prototype[handler].apply(this, Array.prototype.slice.call(arguments, 1));
 		},
 		priority: 0,
-		exp: '(%ns)'
+		exp: '(%ns)',
+		exp2:'(#param:%ns)'
 	};
 
 	// API
@@ -605,6 +601,7 @@ Mask.configure('defaults',{
 		"condition": Mask.marker(function(mask){
 			this.mask = mask;
 			this.exp = '(%ns)(?:(==|!=|<|>|<=|>=)(%ns))?\\?(%ns)(?:\\:(%ns))?';
+			this.exp2 = "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:%ns)(?:\\:(#param:%ns))?";
 			this.params = ['comp1','rel','comp2','data','alt'];
 			this.handle = function(){
 				var check = this.mask.scope.find(this.params[0]),

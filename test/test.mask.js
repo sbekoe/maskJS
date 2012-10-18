@@ -7,7 +7,7 @@ test('logicless',function(){
 			pattern:{
 				"default":	{token:'{{%s%logic%s}}'},
 				"singleHtml":	{token:'<!--%s%logic%s/-->', priority:1},
-				"html":		{token:'%ls<!--%s%logic%s-->%n%tmp%ls<!--%s/%w%s-->%n'}
+				"html":		{token:'%ls<!--%s%logic%s-->%n%tmp%ls<!--%s/%id%s-->%n'}
 			},
 			cache:false,
 			data:{
@@ -23,7 +23,7 @@ test('logicless',function(){
 			item:[
 				{nested:'nested1'},
 				{nested:'nested2', text:'scope level 2 data'},
-				{nested:'nested3'},
+				{nested:'nested3'}
 			],
 			unusedData:'???'
 		}),

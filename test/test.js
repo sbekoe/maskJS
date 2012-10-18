@@ -1,5 +1,5 @@
 (function($){
-	var BASE = 'http://local.maskjs/test/';
+	var BASE = 'http://localhost/maskJS/test/';
 	CodeMirror.modeURL = BASE +"vendor/CodeMirror2/mode/%N/%N.js";
     $(function(){
         $('.test textarea').keyup(updateCurrentTest);

@@ -291,7 +291,11 @@ var Exp = (function(){
 			return opener === 0? string.slice(0,match.index) : Exp.skipper;
 		});
 	}
-	var isArray = Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';}
+	var isArray = Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';},
+		byLength = ffunction( ,m2){
+			return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length;
+		};
+
 
 return Exp;
 }());

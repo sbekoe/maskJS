@@ -95,7 +95,7 @@ var Exp = (function(){
 			this._captures = settings.captures || [''];
 			this._assignments = {};
 			this._escaped = escaped;
-			this._needle = new RegExp('\\\\(' + escaped.join('|') + ')|\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.join('|')||'$^') + ')|(' + (captures.join('|')||'$^') + ')|(' + (injections.join('|')||'$^') + ')','g');
+			this._needle = new RegExp('\\\\(' + escaped.join('|') + ')|\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.sort(byLength).join('|')||'$^') + ')|(' + (captures.join('|')||'$^') + ')|(' + (injections.join('|')||'$^') + ')','g');
 			this._exp = new RegExp(
 				this._captures.length>1?this.source : this.build(this.source, this._captures, this._assignments),
 				this.flags || ((this.global? 'g' : '') + (this.ignoreCase? 'i' : '') + (this.multiline? 'm' : ''))
@@ -150,11 +150,18 @@ var Exp = (function(){
 						if(isCapture){ captures.push(ns); }
 						if(replacement.a || replacement.assign){ assignments[ns] = replacement.a || replacement.assign; }
 						// build the replacement recursive and wrap it with ( ) for capturing or (?: ) for injection
-						replacement = (isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')';
+//						replacement = (isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')';
 						// add the prepended native expression string and the replacement to the compiled expression
-						exp.push(src.slice(lastIndex, match.index), replacement);
+//						exp.push(src.slice(lastIndex, match.index), replacement);
+
+						// add the prepended native expression string and the replacement to the compiled expression
+						// the replacement expression is build recursive and wraped with ( ) for capturing or (?: ) for injection
+						exp.push(
+							src.slice(lastIndex, match.index),
+							(isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')'
+						);
 						// set the needles index back to
-						needle.lastIndex = lastIndex = match.index + match[0].length + (match[2]? replacement.length - 1 : 0);
+						needle.lastIndex = lastIndex = match.index + match[0].length + (match[2]? replacement.s.length + 1 : 0);
 						namespace.pop();
 					}
 				}
@@ -173,7 +180,7 @@ var Exp = (function(){
 		 * @return {array}
 		 */
 		exec: function(string){
-			var match, i, captures = this._captures, assignments = this._assignments,assignment, attribute, a;
+			var match, i, captures = this._captures, assignments = this._assignments,assignment, namespace, attribute, attr, a;
 			this._exp.lastIndex = this.lastIndex;
 
 			if(match = this._exp.exec(string)){
@@ -181,12 +188,15 @@ var Exp = (function(){
 				match.lastRange = this.lastRange;
 				match.range = this.lastRange = [match.index, this._exp.lastIndex];
 				for(i = 0; i<captures.length; i++){
-					attribute = ATTRIBUTE_PREFIX + captures[i];
+					namespace = ATTRIBUTE_PREFIX + captures[i];
+					attribute = ATTRIBUTE_PREFIX + (attr = captures[i].slice(captures[i].lastIndexOf('_')+1));
 
 
+					if(!match[namespace]){ match[namespace] = [];}
 					if(!match[attribute]){ match[attribute] = [];}
 					if(typeof match[i] !== 'undefined'){
-						match[attribute].push(match[i]);
+						match[namespace].push(match[i]);
+						if(attribute !== namespace && captures.indexOf(attr) === -1){match[attribute].push(match[i]);}
 						if(assignment = assignments[captures[i]]){for(a in assignment){
 							if(assignment.hasOwnProperty(a)){match[a] = assignment[a];}
 						}}
@@ -283,17 +293,15 @@ var Exp = (function(){
 	Exp.version = '0.4';
 
 	// helper
-	function findClosedReplacement(string){
-		var opener = 1;
-		return Exp.search(/\(|\)|\\\(|\\\)/g,string,function(match){
-			if(match[0] === '('){opener++;}
-			if(match[0] === ')'){opener--;}
-			return opener === 0? string.slice(0,match.index) : Exp.skipper;
-		});
-	}
 	var isArray = Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';},
-		byLength = ffunction( ,m2){
-			return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length;
+		byLength = function(a,b){ return b.length - a.length;},
+		findClosedReplacement = function (string){
+			var opener = 1;
+			return Exp.search(/\(|\)|\\\(|\\\)/g,string,function(match){
+				if(match[0] === '('){opener++;}
+				if(match[0] === ')'){opener--;}
+				return opener === 0? string.slice(0,match.index) : Exp.skipper;
+			});
 		};
 
 

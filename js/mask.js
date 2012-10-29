@@ -8,6 +8,10 @@
 window.Mask = window.Mask ||  (function(window, document, undefined){
 	"use strict";
 
+	var
+		/** @const */ NAMESPACE_DELIMITER = '.',
+		/** @const */ NAMESPACE_DELIMITER_EXP = /\./g;
+
 	/**
 	 * Represents a Template
 	 * @constructor
@@ -40,7 +44,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			this.tokenizer =  new Tokenizer(this);
 			this.scope = new Scope({},this.options.data);
 			this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
-			var tokens2 = this.tokenizer.lexicalAnalyse(this.template);
+			var tokens2 = this.tokenizer.synthesize(this.template);
 		},
 
 		/**
@@ -223,7 +227,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			var exp = /#opener|#closer/gm,
 //				wildcards = extend({}, this.mask.options.wildcards, {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[], id:'#ns'}),
 				wildcards = extend(
-					{"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+"},
+					{"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
 					{opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
 				),
 				part,id;
@@ -310,36 +314,79 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			//console.log(exp, parts,wildcards, this.exp);
 		},
 
-		lexicalAnalyse: function(template){
+		synthesize: function(template){
 			var parser = new RegExp(this.parser,'gm'),
 				tokens,
 				tree = {}, // the parse tree,
 				objects = [],
 				match,
+				text,
 				i = 0, o, level, stream;
 			// Lexical analysis (scanner)
 			tokens = this.exp.scan(template, function(match, tokens){
-				tokens.push('text ' + (objects.push(template.slice(match.lastRange[1], match.range[0]))-1));
+				if(text = template.slice(match.lastRange[1], match.range[0])){
+					tokens.push('text ' + (objects.push(text)-1));
+				}
 				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.$param.join(' ') || ''));
 			});
-			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.lastRange[1]))-1));
+			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.range[1]))-1));
 			stream = this.stream = tokens.reverse().join('\n');
+			this.objects = objects;
 			console.log(template)
 			console.log(stream)
 			console.log(objects)
+			this.generate();
 			return tokens;
 			tree.template = [];
 			tree.marker = {};
 			// semantic analyses
 		},
-		semanticAnalyse: function(parent){
-			var tree = parent.tree || {template:[], marker:{}},
+		generate: function(parent){
+			var
+				parent = parent || {},
 				stream = parent.stream || this.stream,
-				parser = /^(text|opener|closer) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm;
+				parentNamespace = parent.namespace || this.namespace || 'main',
+				namespace, path,
+				parser1 = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
+				parser2 = '^(opener) (\\d+) (pattern) .*(id).*$',
+				parser3 = '^(opener) (\\d+) (pattern).*$',
+				match1, match2, parser2_, parser3_,
+				tokens = [],
+				references = [],
+				nested;
+				while(match1 = parser1.exec(stream)){
+					switch(match1[1]){
+						case 'text':
+							tokens.push(JSON.stringify(this.objects[match1[2]]));
+							break;
+						case 'closer':
+							parser2_ = new RegExp(parser2.replace('pattern',match1[3]).replace('id',match1[4]),'gm');
+							parser3_ = new RegExp(parser3.replace('pattern',match1[3]),'gm');
+							parser2_.lastIndex = parser3_.lastIndex = parser1.lastIndex;
+							if(match2 = parser2_.exec(stream) || parser3_.exec(stream)){
+								nested = stream.slice(parser1.lastIndex, match2.index);
+								namespace = (this.objects[match2[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP);
+								path =  parentNamespace + NAMESPACE_DELIMITER + namespace.join('');
+								parser1.lastIndex = match2.index + match2[0].length;
+								references.push(namespace);
+								tokens.push("this.render(" + namespace.join('') + ",'" + path + "')");
+								if(nested !== ''){
+									this.generate({stream:nested, namespace:path});
+								}
+							}else{
+								throw ('no opener found for the token: ' + match1[0]);
+							}
+							break;
+						case 'opener':
+							references.push(namespace = (this.objects[match1[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
+							tokens.push("this.render(" + namespace.join('') + ")");
+							break;
+					}
 
-
-
+				}
+				registerTemplate(parentNamespace, tokens.reverse(), references);
 		},
+
 
 		parse:function(template, scope){
 
@@ -459,6 +506,45 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			return source;
 		}
 	};
+	var
+		buildRenderer = Tokenizer.buildRenderer = function(namepsace, tokens, references){
+			return "Mask.template['" + namepsace + "']={" +
+				"render:function(data){" +
+					buildNamespaceDef(references) +
+					"return\n" + tokens.join("+\n") + ";" +
+				"}" +
+			"}";
+		},
+		buildNamespaceDef = Tokenizer.buildNamespaceDef = function(namespaces){
+			return _(namespaces)
+				.uniq()
+				.reduce(function(memo,ns){
+					var name = ns.join(""), value = "data['" + ns.join("']['") + "']";
+					return memo + "try{var " + name + "=" + value + ";}catch(e){var " + name + "=this.data('" + ns.join(NAMESPACE_DELIMITER) + "');}\n";
+				},'');
+		},
+		registerTemplate = Tokenizer.registerTemplate = function(namepsace, tokens, references){
+			// http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
+			if(!Mask.template[namepsace]){
+				var
+					//id = 'Mask.template.' + namepsace,
+					head = document.getElementsByTagName('head'),
+					script = document.createElement('script');
+				script.type  = "text/javascript";
+				script.text  = buildRenderer(namepsace, tokens, references);
+				//script.src   = "path/to/your/javascript.js";    // use this for linked script
+
+				document.body.appendChild(script);
+				document.body.removeChild(document.body.lastChild);
+				return true;
+			}
+			return false
+		},
+		removeTemplate = Tokenizer.removeTemplate = function(namepsace){
+			delete Mask.template[namepsace];
+		};
+
+
 
 	function Marker(mask){
 		this.init(mask);
@@ -514,7 +600,9 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		},
 		priority: 0,
 		exp: '(%ns)',
-		exp2:'(#param:%ns)'
+
+		exp2:'(#param:#namespace)',
+		compile2:function(namespace){return "this.data(" + namespace + ")";}
 	};
 
 	// API
@@ -531,6 +619,37 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		return extend(new Constructor(),attributes||{});
 	};
 	Mask.configure = function(space,settings){extend(Mask[space],settings,true);};
+	Mask.template = {};
+	Mask.render = function(template, data){
+
+	};
+
+	function View(template, data){
+		this.t = template;	// template
+		this.d = data;		// data
+		this.b = {i:0}; 		// base data
+		this.scope = new Scope(this.base);
+		//this.render();
+	}
+
+	View.prototype = {
+		render: function(data){
+			var
+				view = this,
+				tmpl = Mask.template[view.t];
+
+			if(tmpl !== undefined){
+				return _(makeArray(data))
+					.map(function(v, i, l){
+						view.b.i = i;
+						view.b.n = l.length;
+						return tmpl.render.call(view, data)
+				},'');
+			}
+			return '';
+		},
+		data:function(ns){ return this.scope.find(ns); }
+	}
 
 	var presets = Mask.presets = {},
 		defaults = Mask.defaults = {			// default options
@@ -566,6 +685,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	// Utilities
 		cache = Mask.cache = {},
 		isArray = Mask.isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';},
+		makeArray = function(a){return isArray(a)? a : [a];},
 		extend = Mask.extend = function(o){
 			var l = arguments.length,
 				recursive = typeof arguments[l-1] ==='boolean' && arguments[l-1]===true,
@@ -601,7 +721,7 @@ Mask.configure('defaults',{
 		"condition": Mask.marker(function(mask){
 			this.mask = mask;
 			this.exp = '(%ns)(?:(==|!=|<|>|<=|>=)(%ns))?\\?(%ns)(?:\\:(%ns))?';
-			this.exp2 = "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:%ns)(?:\\:(#param:%ns))?";
+			this.exp2 = "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:#namespace)(?:\\:(#param:%ns))?";
 			this.params = ['comp1','rel','comp2','data','alt'];
 			this.handle = function(){
 				var check = this.mask.scope.find(this.params[0]),

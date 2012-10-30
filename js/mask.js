@@ -365,11 +365,11 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 							parser2_.lastIndex = parser3_.lastIndex = parser1.lastIndex;
 							if(match2 = parser2_.exec(stream) || parser3_.exec(stream)){
 								nested = stream.slice(parser1.lastIndex, match2.index);
-								namespace = (this.objects[match2[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP);
-								path =  parentNamespace + NAMESPACE_DELIMITER + namespace.join('');
+								namespace = (this.objects[match2[2]]['$namespace'][0]||'');//.split(NAMESPACE_DELIMITER_EXP);
+								path =  parentNamespace + NAMESPACE_DELIMITER + namespace;//.join('');
 								parser1.lastIndex = match2.index + match2[0].length;
 								references.push(namespace);
-								tokens.push("this.render(" + namespace.join('') + ",'" + path + "')");
+								tokens.push("Renderer.handle(data['" + namespace + "'], self, '" + path + "')");
 								if(nested !== ''){
 									this.generate({stream:nested, namespace:path});
 								}
@@ -379,12 +379,12 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 							break;
 						case 'opener':
 							references.push(namespace = (this.objects[match1[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
-							tokens.push("this.render(" + namespace.join('') + ")");
+							tokens.push("renderer.handle(data['" + namespace + "'], self)");
 							break;
 					}
 
 				}
-				registerTemplate(parentNamespace, tokens.reverse(), references);
+				registerTemplate(parentNamespace, tokens.reverse(), references, 'Mask.Renderer');
 		},
 
 
@@ -507,23 +507,25 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		}
 	};
 	var
-		buildRenderer = Tokenizer.buildRenderer = function(namepsace, tokens, references){
-			return "Mask.template['" + namepsace + "']={" +
-				"render:function(data){" +
-					buildNamespaceDef(references) +
-					"return\n" + tokens.join("+\n") + ";" +
+		buildTemplate = Tokenizer.buildRenderer = function(namepsace, tokens, references, renderer){
+			return "(function(Mask,Renderer){\n" +
+				"Mask.template['" + namepsace + "'] = {" +
+					"render: function(data, parent){" +
+						buildNamespaceDef(references) +
+						"return\n" + tokens.join(" +\n") + ";" +
+					"},\n" +
+					"initialize: function(){}" +
 				"}" +
-			"}";
+			"})(Mask," + renderer + ")";
 		},
 		buildNamespaceDef = Tokenizer.buildNamespaceDef = function(namespaces){
-			return _(namespaces)
+			return 'var data = {' +  _(namespaces)
 				.uniq()
-				.reduce(function(memo,ns){
-					var name = ns.join(""), value = "data['" + ns.join("']['") + "']";
-					return memo + "try{var " + name + "=" + value + ";}catch(e){var " + name + "=this.data('" + ns.join(NAMESPACE_DELIMITER) + "');}\n";
-				},'');
+				.map(function(ns){ return '\n\t"' + ns + '": Renderer.data("' + ns + '", data, parent)'; })
+				.join() +
+			'},\n\t self = Renderer.scope(data, parent);\n';
 		},
-		registerTemplate = Tokenizer.registerTemplate = function(namepsace, tokens, references){
+		registerTemplate = Tokenizer.registerTemplate = function(namepsace, tokens, references, renderer){
 			// http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
 			if(!Mask.template[namepsace]){
 				var
@@ -531,7 +533,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 					head = document.getElementsByTagName('head'),
 					script = document.createElement('script');
 				script.type  = "text/javascript";
-				script.text  = buildRenderer(namepsace, tokens, references);
+				script.text  = buildTemplate(namepsace, tokens, references, renderer);
 				//script.src   = "path/to/your/javascript.js";    // use this for linked script
 
 				document.body.appendChild(script);
@@ -623,33 +625,59 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	Mask.render = function(template, data){
 
 	};
+	Mask.resolve =  function(namespace, obj, delimitter){
+		delimitter = delimitter || NAMESPACE_DELIMITER_EXP;
+		obj = obj || window;
+		namespace = namespace.split(delimitter);
+		try{ return eval('(obj["' + namespace.join('"]["') + '"])'); }
+		catch(e){ return undefined; }
+	};
 
-	function View(template, data){
-		this.t = template;	// template
-		this.d = data;		// data
-		this.b = {i:0}; 		// base data
-		this.scope = new Scope(this.base);
-		//this.render();
-	}
+	var Renderer = {
+		run: function(data, parent, template){
+			var tpl = Mask.template[template],
+				meta = {i:0, n:0},
+				output;
+			if(tpl === undefined) return '';
+			parent = Renderer.scope(parent, meta);
 
-	View.prototype = {
-		render: function(data){
-			var
-				view = this,
-				tmpl = Mask.template[view.t];
+			output = _(makeArray(data))
+				.map(function(data, i, l){
+					meta.i = i;
+					meta.n = l.length;
+					return tpl.render(data, parent);
+				})
+				.join('');
 
-			if(tmpl !== undefined){
-				return _(makeArray(data))
-					.map(function(v, i, l){
-						view.b.i = i;
-						view.b.n = l.length;
-						return tmpl.render.call(view, data)
-				},'');
-			}
-			return '';
+			delete meta.i, meta.n;
+
+			return output;
 		},
-		data:function(ns){ return this.scope.find(ns); }
+
+		handle: function(data, parent, template){
+			switch(typeof data){
+				case 'string':
+				case 'number': return data;
+				case 'object': return template && parent? this.run(data, parent, template) : '';
+				default: return '';
+			}
+		},
+
+		data: function(namespace, data, parent){
+			return Mask.resolve(namespace,data) || parent.data(namespace);
+		},
+
+		scope: function(parent, data){
+			parent = parent || {data: new Function};
+			return {
+				data: function(namespace){return data[namespace] || parent.data(namespace);}
+			};
+		}
+
 	}
+
+
+	Mask.Renderer = Renderer;
 
 	var presets = Mask.presets = {},
 		defaults = Mask.defaults = {			// default options

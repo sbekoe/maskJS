@@ -622,10 +622,10 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	};
 	Mask.configure = function(space,settings){extend(Mask[space],settings,true);};
 	Mask.template = {};
-	Mask.render = function(template, data){
-
+	Mask.render = function(template, data, parent){
+		return Renderer.run(data, template, parent);
 	};
-	Mask.resolve =  function(namespace, obj, delimitter){
+	var resolve = Mask.resolve =  function(namespace, obj, delimitter){
 		delimitter = delimitter || NAMESPACE_DELIMITER_EXP;
 		obj = obj || window;
 		namespace = namespace.split(delimitter);
@@ -633,8 +633,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		catch(e){ return undefined; }
 	};
 
-	var Renderer = {
-		run: function(data, parent, template){
+	var Renderer = Mask.Renderer = {
+		run: function(data, template, parent){
 			var tpl = Mask.template[template],
 				meta = {i:0, n:0},
 				output;
@@ -658,13 +658,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			switch(typeof data){
 				case 'string':
 				case 'number': return data;
-				case 'object': return template && parent? this.run(data, parent, template) : '';
+				case 'object': return template && parent? this.run(data, template, parent) : '';
 				default: return '';
 			}
 		},
 
 		data: function(namespace, data, parent){
-			return Mask.resolve(namespace,data) || parent.data(namespace);
+			return resolve(namespace,data) || parent.data(namespace);
 		},
 
 		scope: function(parent, data){
@@ -677,7 +677,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	}
 
 
-	Mask.Renderer = Renderer;
+
 
 	var presets = Mask.presets = {},
 		defaults = Mask.defaults = {			// default options

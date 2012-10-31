@@ -1,5 +1,20 @@
-module('maskJS');
+module('Mask.Renderer');
+test('scope',function(){
+	var scope = Mask.Renderer.scope({a:1,b:2,"c.d":{e:"f"}})
+	equal(scope.data('a'),1);
+	equal(scope.data('b'),2);
+	deepEqual(scope.data('c.d'),{e:"f"});
 
+	scope = Mask.Renderer.scope({a:2,"c":{e:"f"}},scope)
+	deepEqual(scope.data('c.d'),{e:"f"});
+	deepEqual(scope.data('c'),{e:"f"});
+	equal(scope.data('a'),2);
+	equal(scope.data('b'),2);
+});
+
+
+
+module('maskJS');
 test('logicless',function(){
 	var template = Mask.t(
 		"<!--defMarker/-->\n<!--dynMarker/-->\n<ul class=\"{{ top }}\">\n  <!--item-->\n  <li class=\"{{nested}}\">{{i}}: {{text}} - the {{i}} is rendered twice</li>{{unusedMarkerWillDisappear}}\n  <!--/item-->\n</ul>",

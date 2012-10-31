@@ -369,7 +369,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 								path =  parentNamespace + NAMESPACE_DELIMITER + namespace;//.join('');
 								parser1.lastIndex = match2.index + match2[0].length;
 								references.push(namespace);
-								tokens.push("Renderer.handle(data['" + namespace + "'], self, '" + path + "')");
+								tokens.push("handle('" + namespace + "', self, '" + path + "')");
 								if(nested !== ''){
 									this.generate({stream:nested, namespace:path});
 								}
@@ -379,7 +379,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 							break;
 						case 'opener':
 							references.push(namespace = (this.objects[match1[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
-							tokens.push("renderer.handle(data['" + namespace + "'], self)");
+							tokens.push("handle('" + namespace + "', self)");
 							break;
 					}
 
@@ -509,10 +509,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	var
 		buildTemplate = Tokenizer.buildRenderer = function(namepsace, tokens, references, renderer){
 			return "(function(Mask,Renderer){\n" +
+				"var handle = Renderer.handle, scope = Renderer.scope;\n" +
 				"Mask.template['" + namepsace + "'] = {" +
-					"render: function(data, parent){" +
-						buildNamespaceDef(references) +
-						"return\n" + tokens.join(" +\n") + ";" +
+					"render: function(data, parent){\n" +
+//						buildNamespaceDef(references) +
+						"var self = scope(data, parent); \n\t" +
+							//"data = self.data;\n" +
+						"return " + tokens.join(" + ") + ";" +
 					"},\n" +
 					"initialize: function(){}" +
 				"}" +
@@ -622,8 +625,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	};
 	Mask.configure = function(space,settings){extend(Mask[space],settings,true);};
 	Mask.template = {};
-	Mask.render = function(template, data, parent){
-		return Renderer.run(data, template, parent);
+	Mask.render = function(template, data, scope){
+		return Renderer.run(data, template, scope);
 	};
 	var resolve = Mask.resolve =  function(namespace, obj, delimitter){
 		delimitter = delimitter || NAMESPACE_DELIMITER_EXP;
@@ -636,16 +639,16 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	var Renderer = Mask.Renderer = {
 		run: function(data, template, parent){
 			var tpl = Mask.template[template],
-				meta = {i:0, n:0},
+				meta = {i:0, n:0}, // metadata scope provides runtime data
+				scope = Renderer.scope(meta, parent),
 				output;
 			if(tpl === undefined) return '';
-			parent = Renderer.scope(parent, meta);
 
 			output = _(makeArray(data))
 				.map(function(data, i, l){
 					meta.i = i;
 					meta.n = l.length;
-					return tpl.render(data, parent);
+					return tpl.render(data, scope);
 				})
 				.join('');
 
@@ -654,26 +657,25 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			return output;
 		},
 
-		handle: function(data, parent, template){
+		handle: function(namespace, scope, template){
+			var data = scope.data(namespace)
 			switch(typeof data){
 				case 'string':
 				case 'number': return data;
-				case 'object': return template && parent? this.run(data, template, parent) : '';
+				case 'object': return template? Renderer.run(data, template, scope) : '';
 				default: return '';
 			}
 		},
 
-		data: function(namespace, data, parent){
-			return resolve(namespace,data) || parent.data(namespace);
-		},
-
-		scope: function(parent, data){
+		scope: function(data, parent){
 			parent = parent || {data: new Function};
 			return {
-				data: function(namespace){return data[namespace] || parent.data(namespace);}
+				data: function(namespace){
+					var r;
+					return (r=data[namespace]) !== undefined? r : (r=resolve(namespace, data)) !== undefined? r : parent.data(namespace);
+				}
 			};
 		}
-
 	}
 
 

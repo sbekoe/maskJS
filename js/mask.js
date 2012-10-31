@@ -530,7 +530,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		},
 		registerTemplate = Tokenizer.registerTemplate = function(namepsace, tokens, references, renderer){
 			// http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
-			if(!Mask.template[namepsace]){
 				var
 					//id = 'Mask.template.' + namepsace,
 					head = document.getElementsByTagName('head'),
@@ -542,7 +541,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				document.body.appendChild(script);
 				document.body.removeChild(document.body.lastChild);
 				return true;
-			}
 			return false
 		},
 		removeTemplate = Tokenizer.removeTemplate = function(namepsace){

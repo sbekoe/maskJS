@@ -357,7 +357,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				while(match1 = parser1.exec(stream)){
 					switch(match1[1]){
 						case 'text':
-							tokens.push(JSON.stringify(this.objects[match1[2]]));
+							tokens.push('"' + esc(this.objects[match1[2]]) + '"');
 							break;
 						case 'closer':
 							parser2_ = new RegExp(parser2.replace('pattern',match1[3]).replace('id',match1[4]),'gm');
@@ -521,13 +521,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				"}" +
 			"})(Mask," + renderer + ")";
 		},
-		buildNamespaceDef = Tokenizer.buildNamespaceDef = function(namespaces){
-			return 'var data = {' +  _(namespaces)
-				.uniq()
-				.map(function(ns){ return '\n\t"' + ns + '": Renderer.data("' + ns + '", data, parent)'; })
-				.join() +
-			'},\n\t self = Renderer.scope(data, parent);\n';
-		},
 		registerTemplate = Tokenizer.registerTemplate = function(namepsace, tokens, references, renderer){
 			// http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
 				var
@@ -542,6 +535,17 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				document.body.removeChild(document.body.lastChild);
 				return true;
 			return false
+		},
+		esc = Tokenizer.esc = function(str){
+			return str
+					.replace(/[\\]/g, '\\\\')
+					.replace(/[\"]/g, '\\\"')
+					.replace(/[\/]/g, '\\/')
+					.replace(/[\b]/g, '\\b')
+					.replace(/[\f]/g, '\\f')
+					.replace(/[\n]/g, '\\n')
+					.replace(/[\r]/g, '\\r')
+					.replace(/[\t]/g, '\\t');
 		},
 		removeTemplate = Tokenizer.removeTemplate = function(namepsace){
 			delete Mask.template[namepsace];

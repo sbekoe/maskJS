@@ -1,22 +1,3 @@
-module('Mask.Renderer');
-test('scope()',function(){
-	var scope = Mask.Renderer.scope({a:1,b:2,"c.d":{e:"f"}})
-	equal(scope.data('a'), 1);
-	equal(scope.data('b'), 2);
-	deepEqual(scope.data('c.d'), {e:"f"});
-	equal(scope.data('c.d.e'), undefined);
-
-	scope = Mask.Renderer.scope({a:2,c:{d:"e"}}, scope)
-	deepEqual(scope.data('c'), {d:"e"});
-	equal(scope.data('c.d'), "e");
-	equal(scope.data('a'), 2);
-	equal(scope.data('b'), 2);
-});
-
-
-
-
-
 module('Mask');
 test('t() - logicless',function(){
 	var template = Mask.t(

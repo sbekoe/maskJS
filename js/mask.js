@@ -119,7 +119,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				}
 			}
 
-			//console.log(tokens2);
 			tokens.template.push(template.slice(scope.next));
 			return tokens.template.length? tokens : this.tokens;
 		}
@@ -332,9 +331,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.range[1]))-1));
 			stream = this.stream = tokens.reverse().join('\n');
 			this.objects = objects;
-			console.log(template)
-			console.log(stream)
-			console.log(objects)
 			this.generate();
 			return tokens;
 			tree.template = [];
@@ -347,38 +343,38 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				stream = parent.stream || this.stream,
 				parentNamespace = parent.namespace || this.namespace || 'main',
 				namespace, path,
-				parser1 = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
-				parser2 = '^(opener) (\\d+) (pattern) .*(id).*$',
-				parser3 = '^(opener) (\\d+) (pattern).*$',
-				match1, match2, parser2_, parser3_,
+				nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
+				nextIndexedOpener,
+				nextOpener,
+				token, opener,
 				tokens = [],
 				references = [],
 				nested;
-				while(match1 = parser1.exec(stream)){
-					switch(match1[1]){
+				while(token = nextToken.exec(stream)){
+					switch(token[1]){
 						case 'text':
-							tokens.push('"' + esc(this.objects[match1[2]]) + '"');
+							tokens.push('"' + esc(this.objects[token[2]]) + '"');
 							break;
 						case 'closer':
-							parser2_ = new RegExp(parser2.replace('pattern',match1[3]).replace('id',match1[4]),'gm');
-							parser3_ = new RegExp(parser3.replace('pattern',match1[3]),'gm');
-							parser2_.lastIndex = parser3_.lastIndex = parser1.lastIndex;
-							if(match2 = parser2_.exec(stream) || parser3_.exec(stream)){
-								nested = stream.slice(parser1.lastIndex, match2.index);
-								namespace = (this.objects[match2[2]]['$namespace'][0]||'');//.split(NAMESPACE_DELIMITER_EXP);
-								path =  parentNamespace + NAMESPACE_DELIMITER + namespace;//.join('');
-								parser1.lastIndex = match2.index + match2[0].length;
+							nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + token[3] + ') .*('+ token[4] + ').*$','gm'); // insert pattern and id/closer id
+							nextOpener = new RegExp('^(opener) (\\d+) (' + token[3] + ').*$','gm'); // insert pattern
+							nextIndexedOpener.lastIndex = nextOpener.lastIndex = nextToken.lastIndex;
+							if(opener = nextIndexedOpener.exec(stream) || nextOpener.exec(stream)){
+								nested = stream.slice(nextToken.lastIndex, opener.index);
+								namespace = (this.objects[opener[2]]['$namespace'][0]||'');
+								path =  parentNamespace + NAMESPACE_DELIMITER + namespace;
+								nextToken.lastIndex = opener.index + opener[0].length;
 								references.push(namespace);
 								tokens.push("handle('" + namespace + "', self, '" + path + "')");
 								if(nested !== ''){
 									this.generate({stream:nested, namespace:path});
 								}
 							}else{
-								throw ('no opener found for the token: ' + match1[0]);
+								throw ('no opener found for the token: ' + token[0]);
 							}
 							break;
 						case 'opener':
-							references.push(namespace = (this.objects[match1[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
+							references.push(namespace = (this.objects[token[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
 							tokens.push("handle('" + namespace + "', self)");
 							break;
 					}
@@ -636,6 +632,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		namespace = namespace.split(delimitter);
 		try{ return eval('(obj["' + namespace.join('"]["') + '"])'); }
 		catch(e){ return undefined; }
+	},
+	lookup = function(namespace, data, lookup){
+		var r, n = namespace.slice(namespace[0] === NAMESPACE_DELIMITER);
+		return n === '' ? data : // current context
+			(r = data[n]) !== undefined? r : // attr of current context
+			(r = resolve(n, data)) !== undefined? r : // path in current context
+			lookup? lookup(n) : undefined; // recursive lookup
 	};
 
 	var Renderer = Mask.Renderer = {
@@ -670,12 +673,10 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		},
 
 		scope: function(data, parent){
-			parent = parent || {data: new Function};
+			parent = parent || {data: new Function}; // create parent context if necessary
 			return {
-				data: function(namespace){
-					var r;
-					return (r=data[namespace]) !== undefined? r : (r=resolve(namespace, data)) !== undefined? r : parent.data(namespace);
-				}
+				data: function(namespace){ return lookup(namespace, data, parent.data);},
+				parent: parent
 			};
 		}
 	}

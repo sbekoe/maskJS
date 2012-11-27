@@ -10,7 +10,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
 	var
 		/** @const */ NAMESPACE_DELIMITER = '.',
-		/** @const */ NAMESPACE_DELIMITER_EXP = /\./g;
+		/** @const */ NAMESPACE_DELIMITER_EXP = /\./g,
+		/** @const */ NAMESPACE_HOLD = ':';
 
 	/**
 	 * Represents a Template
@@ -232,7 +233,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				part,id;
 
 			// sort patterns
-			for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); }}
+			for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); pattern[m].name = m;}}
 			patternOrder.sort(function(m1,m2){
 				return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length;
 			});
@@ -242,19 +243,25 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				// new
 				if (p.token && (part = parts.exec(p.token))) {
 					if (part['$delimiterL'][0]) {
+                        /*
 						wildcards[id = _.uniqueId(patternOrder[i])] = {
 							source:Exp.esc(part.$delimiterL[0],true),
 							assign:{pattern:patternOrder[i]}
 						};
 						wildcards.delimiterL.push('#' + id);
+                        //*/
+                        wildcards.delimiterL.push('(' + Exp.esc(part.$delimiterL[0],true) + ')>' + patternOrder[i])
 					}
 					if (part['$delimiterR'][0]) { wildcards.delimiterR.push(Exp.esc(part['$delimiterR'][0],true)); }
 					if (part['$closer'][0] || part['$delimiterR'][0]) {
+                        /*
 						wildcards[id = _.uniqueId(patternOrder[i])] = {
 							source:Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : ''),
 							assign:{pattern:patternOrder[i]}
 						};
 						wildcards.closer.push('#' + id);
+                        //*/
+                        wildcards.closer.push('(' + Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : '') + ')>' + patternOrder[i])
 					}
 				}
 
@@ -309,7 +316,10 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			// save the first match index of closing id's
 			this.captures.id = index;
 			this.captures.length = index + 1;
-			this.exp = new Exp(exp,{wildcards:wildcards});
+			this.exp = new Exp(exp,{
+                wildcards:wildcards,
+                assignments:pattern
+            });
 			//console.log(exp, parts,wildcards, this.exp);
 		},
 
@@ -326,7 +336,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				if(text = template.slice(match.lastRange[1], match.range[0])){
 					tokens.push('text ' + (objects.push(text)-1));
 				}
-				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.$param.join(' ') || ''));
+				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.$param.join(' ') || ''));
 			});
 			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.range[1]))-1));
 			stream = this.stream = tokens.reverse().join('\n');
@@ -634,11 +644,14 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		catch(e){ return undefined; }
 	},
 	lookup = function(namespace, data, lookup){
-		var r, n = namespace.slice(namespace[0] === NAMESPACE_DELIMITER);
+		var r,
+			up = namespace[0] === NAMESPACE_DELIMITER,
+			hold = namespace[0] === NAMESPACE_HOLD,
+			n = namespace.slice(up || hold); // make use of native type cast (boolean to number) to strip the prefixes from the namespace
 		return n === '' ? data : // current context
 			(r = data[n]) !== undefined? r : // attr of current context
 			(r = resolve(n, data)) !== undefined? r : // path in current context
-			lookup? lookup(n) : undefined; // recursive lookup
+			lookup && !hold? lookup(n) : undefined; // recursive lookup
 	};
 
 	var Renderer = Mask.Renderer = {

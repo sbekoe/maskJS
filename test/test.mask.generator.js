@@ -1,9 +1,9 @@
 module('Mask.Generator');
 
 test('full api',function(){
-    var Generator = Mask.Generator, generator = new  Generator;
+    var Generator = Mask.Generator;
 
-    generator.addTemplate('View', function() {
+    Generator.addTemplate('View', function() {
         /** @marker */ var NAMESPACE, CONTENT;
 
         Mask.v['NAMESPACE'] = Mask.View.extend({
@@ -17,7 +17,7 @@ test('full api',function(){
         });
     });
 
-    generator.addTranslator('CONTENT', function(context, key) {
+    Generator.addTranslator('CONTENT', function(context, key) {
         var c = context.content, i;
         if(!c) return key;
 
@@ -27,7 +27,7 @@ test('full api',function(){
     });
 
     equal(
-        generator.scan('View',{
+        Generator.generate('View',{
             namespace:'main',
             content:['1','2','3']
         }),

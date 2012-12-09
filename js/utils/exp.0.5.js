@@ -289,7 +289,6 @@ var Exp = (function(){
 			if(token === Exp.breaker){break;}
 			else if(token !== Exp.skipper) tokens.push(token);
 		}}
-		// exp.lastIndex = lastIndex; // TODO: proof sense
 		return tokens;
 	}
 

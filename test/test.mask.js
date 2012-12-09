@@ -62,7 +62,7 @@ test('render()', function(){
 
 
 
-    var template = new Mask.v['main'],
+    var template = new Mask.v['root'],
         data = {
             top:'top',
             text:'scope level 1 data',

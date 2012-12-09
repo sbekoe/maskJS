@@ -25,32 +25,13 @@
 
     */
 
-	/**
-	 * Create new Compiler
-	 * Used to build the regexp to detect the markers of a template
-	 * @constructor
-	 * @param {Mask} mask
-	 * @property {Mask} mask
-	 * @property {Array} opener
-	 * @property {Array} divider
-	 * @property {Array} closer
-	 * @property {Array} logic
-	 * @property {Object} captures
-	 * @property {String} parser
-	 */
-	var Compiler = function(mask) {
-		this.mask = mask;
-
-
-        this.define();
-        this.scan(this.mask.source); // TODO: this.mask.template -> this.source
-        this.parse();
-	}
 
     // Multi-pass compiler
-	Compiler.prototype = {
-        compile: function(source){
-            this.source = source || this.source;
+	var Compiler =  {
+        compile: function(source, options){
+            // enable use by prototype extension and standalone
+            this.source = source || this.source || '';
+            this.options = options || this.options || {};
 
             this.lexer = this.define(); // define() is kind of a scanner generator lexer = scanner
             this.tokens = this.scan(); // lexical analyse // produces the stream also
@@ -59,8 +40,8 @@
 
 		define: function(){
 			var
-                pattern = this.mask.options.pattern,
-				marker = this.mask.options.marker,
+                pattern = this.options.pattern,
+				marker = this.options.marker,
 				nested = new RegExp('^(.+)' +  '%logic' + '(?:(.*)' + '%tmp' + ')(.+(%id).*|.+)$'),
 				parts = new Exp({
 					source: "^#delimiterL\\%logic(?:#delimiterR#nested)#closer|#delimiterL\\%logic#delimiterR?$",
@@ -113,71 +94,81 @@
 				wildcards.logic.push(marker[markerOrder[i]].exp2 || marker[markerOrder[i]].exp);
 			}
 
-			this.exp = new Exp(exp,{
+			return new Exp(exp,{
                 wildcards:wildcards,
                 assignments:pattern
             });
 		},
 
-		scan: function(template){
+		scan: function(source){
 			var
-				tokens,
-				objects = [],
-				text;
+                src = source || this.source,
+                tokens = [],
+                stream,
+                text;
 
 			// Lexical analysis (scanner)
-			tokens = this.exp.scan(template, function(match, tokens){
-				if(text = template.slice(match.lastRange[1], match.range[0])){
-					tokens.push('text ' + (objects.push(text)-1));
+			stream = this.lexer.scan(src, function(match, stream){
+				if(text = src.slice(match.lastRange[1], match.range[0])){
+					stream.push('text ' + (tokens.push(text)-1));
 				}
-				return (match['$opener'][0]? 'opener ' : 'closer ') + (objects.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.$param.join(' ') || ''));
+				return (match['$opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.$param.join(' ') || ''));
 			});
-			if(this.exp.lastMatch) tokens.push('text ' + (objects.push(template.slice(this.exp.lastMatch.range[1]))-1));
-			this.stream = tokens.reverse().join('\n');
-			this.objects = objects;
-			return tokens;
+			if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
+
+            this.stream = stream.reverse().join('\n');
+
+            return tokens;
 		},
 
-		parse: function(parent){
+		parse: function(s,a){
 			var
-				parent = parent || {},
-				stream = parent.stream || this.stream,
-				parentNamespace = parent.namespace || this.namespace || 'main',
-				namespace, path,
+				abstract = a || {namespace: this.namespace || 'root', content:[[]]},
+                stream = s || this.stream,
+				namespace, path, child,
 				nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
 				nextIndexedOpener,
 				nextOpener,
-				token, opener,
+				hash, // hash of a token
+                ohash, // hash of an opener token
 				tokens = [],
-				references = [],
 				nested,
+                i = 0,
                 viewTemplate = View.template.toString(),
                 view = viewTemplate.slice(viewTemplate.indexOf('{')+1, viewTemplate.lastIndexOf('}'));
-				while(token = nextToken.exec(stream)){
-					switch(token[1]){
+
+				while(hash = nextToken.exec(stream)){
+					switch(hash[1]){
 						case 'text':
-							tokens.push('"' + Generator.esc(this.objects[token[2]]) + '"');
+							tokens.push('"' + Generator.esc(this.tokens[hash[2]]) + '"');
+                            abstract.content[0].push(this.tokens[hash[2]]);
 							break;
 						case 'closer':
-							nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + token[3] + ') .*('+ token[4] + ').*$','gm'); // insert pattern and id/closer id
-							nextOpener = new RegExp('^(opener) (\\d+) (' + token[3] + ').*$','gm'); // insert pattern
+							nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ') .*('+ hash[4] + ').*$','gm'); // insert pattern and id/closer id
+							nextOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ').*$','gm'); // insert pattern
 							nextIndexedOpener.lastIndex = nextOpener.lastIndex = nextToken.lastIndex;
-							if(opener = nextIndexedOpener.exec(stream) || nextOpener.exec(stream)){
-								nested = stream.slice(nextToken.lastIndex, opener.index);
-								namespace = (this.objects[opener[2]]['$namespace'][0]||'');
-								path =  parentNamespace + NAMESPACE_DELIMITER + namespace;
-								nextToken.lastIndex = opener.index + opener[0].length;
-								references.push(namespace);
+
+                            child = {namespace:'', content:[], token: [this.tokens[hash[2]]]};
+
+							if(ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream)){
+								nested = stream.slice(nextToken.lastIndex, ohash.index);
+								namespace = (this.tokens[ohash[2]]['$namespace'][0]||'');
+								child.namespace = path =  abstract.namespace + NAMESPACE_DELIMITER + namespace;
+								nextToken.lastIndex = ohash.index + ohash[0].length;
 								tokens.push("$.handle('" + namespace + "', '" + path + "')");
+                                //child.token.splice(0,0,this.tokens[ohash[2]])
 								if(nested !== ''){
-									this.parse({stream:nested, namespace:path});
-								}
+                                    child.content.splice(0, 0, []);
+                                    this.parse(nested, child)
+                                }
+
+                                abstract.content[0].push(child);
 							}else{
-								throw ('no opener found for the token: ' + token[0]);
+								throw ('no opener found for the token: ' + hash[0]);
 							}
 							break;
 						case 'opener':
-							references.push(namespace = (this.objects[token[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP));
+							namespace = (this.tokens[hash[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP);
 							tokens.push("$.handle('" + namespace + "')");
 							break;
 					}
@@ -185,20 +176,21 @@
 				}
             var generator = {
                 "TOKENS": tokens.reverse().join(" + "),
-                "NAMESPACE": parentNamespace
+                "NAMESPACE": abstract.namespace
             };
             appendScript(view.replace(/_([A-Z]+)_/g, function(marker, name){return generator[name] || marker ; }));
+            _.each(abstract.content, function(a){a.reverse()});
+            return abstract;
 		}
 
 	};
 
 
-    var Generator = function(){};
 
-    Generator.prototype = {
+    var Generator = {
 
         // produces js string from a js template and and a context holding additional info
-        scan: function(template, context){
+        generate: function(template, context){
             var tpl = this._template[template],
                 trl = this._translator,
                 key, key2, result;
@@ -406,14 +398,15 @@
     var Mask  = function (template, options) {
         var opt = typeof options ==='object'? options : presets[options] || presets['default'];
         this.source = template;
-//		this.options = _extend({}, defaults, presets[opt.preset]||{}, opt, true);
         this.options = _.extend({}, defaults, presets[opt.preset]||{}, opt, true);
+
         this.init();
     }
 
-    _.extend(Mask.prototype, {
+    _.extend(Mask.prototype, Compiler, Generator, {
         init: function(){
-            this.tokenizer =  new Compiler(this); // rename to compiler
+            //this.tokenizer =  new Compiler(this); // rename to compiler
+            this.compile();
         }
     });
 

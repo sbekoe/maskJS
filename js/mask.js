@@ -329,7 +329,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
                     );
 
                     if((offset = this._offset.exec(template)[0]).length) template = template.replace(new RegExp('(^|\\n)' + this.esc(offset, true),'g'),'$1');
-
+                    template = template.replace(/\s*$/,'');
                     while(match = keys.exec(template)){
                         tpl.tokens.push(
                             template.slice(prevIndex, match.index),

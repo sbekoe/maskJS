@@ -28,8 +28,9 @@ test('full api',function(){
 
     equal(
         Mask.Generator.render('View',{
-            namespace:'main'
+            namespace:'main',
+            content:['1','2','3']
         }),
-        "        Mask.v['main'] = Mask.View.extend({\n            render:function (data) {\n               var $ = this;\n               if(data) $.data = data;\n\n               return CONTENT;\n            },\n            initialize: function () {}\n        });\n    "
+        "Mask.v['main'] = Mask.View.extend({\n    render:function (data) {\n       var $ = this;\n       if(data) $.data = data;\n\n       return \"1\" + \"2\" + \"3\";\n    },\n    initialize: function () {}\n});"
     )
 });

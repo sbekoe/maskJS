@@ -320,11 +320,11 @@ var Exp = (function(){
 	 * escape all RegExp characters in the given string - even the advaced ones
 	 * based on http://simonwillison.net/2006/Jan/20/escape/ extended with the new characters "%" & ">"
 	 * @param {string} string
-	 * @param {boolean} nativeChars
+	 * @param {boolean} nativeCharsOnly
 	 * @return {string}
 	 */
-	Exp.esc = function(string, nativeChars){
-		return string.replace(new RegExp('[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|' + (nativeChars? '' : '%#') +']','g'), "\\$&");
+	Exp.esc = function(string, nativeCharsOnly){
+		return string.replace(new RegExp('[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|' + (nativeCharsOnly? '' : '%#') +']','g'), "\\$&");
 	};
 
 	Exp.s = function(exp, settings){return new Exp(exp,settings);};

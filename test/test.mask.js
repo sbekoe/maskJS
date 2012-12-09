@@ -58,6 +58,21 @@ test('render()', function(){
 		"<ul class=\"top\">\n  <li class=\"nested1\">0: scope level 1 data - the 0 is rendered twice</li>\n  <li class=\"nested2\">1: scope level 2 data - the 1 is rendered twice</li>\n  <li class=\"nested3\">2: scope level 1 data - the 2 is rendered twice</li>\n</ul>"
 	);
     //*/
+    Mask.Generator.addTemplate(function(){
+        /** @marker: */
+        var NAMESPACE, CONTENT;
+
+        Mask.v['_NAMESPACE_'] = Mask.View.extend({
+            render:function (data) {
+                var $ = this;
+                if(data) $.data = data;
+
+                return _TOKENS_;
+            },
+            initialize: function () {}
+        });
+    });
+
     var template = new Mask.v['main'],
         data = {
             top:'top',

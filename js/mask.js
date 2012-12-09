@@ -185,7 +185,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 				while(token = nextToken.exec(stream)){
 					switch(token[1]){
 						case 'text':
-							tokens.push('"' + esc(this.objects[token[2]]) + '"');
+							tokens.push('"' + Generator.esc(this.objects[token[2]]) + '"');
 							break;
 						case 'closer':
 							nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + token[3] + ') .*('+ token[4] + ').*$','gm'); // insert pattern and id/closer id
@@ -222,17 +222,6 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	};
 
 	var
-		esc = function(str){
-			return str
-                .replace(/[\\]/g, '\\\\')
-                .replace(/[\"]/g, '\\\"')
-                .replace(/[\/]/g, '\\/')
-                .replace(/[\b]/g, '\\b')
-                .replace(/[\f]/g, '\\f')
-                .replace(/[\n]/g, '\\n')
-                .replace(/[\r]/g, '\\r')
-                .replace(/[\t]/g, '\\t');
-		},
 		removeTemplate = Compiler.removeTemplate = function(namepsace){
 			delete Mask.template[namepsace];
 		};
@@ -256,6 +245,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	Mask.render = function(template, data, scope){
 		return Renderer.run(data, template, scope);
 	};
+
 
 	var Renderer = Mask.Renderer = {
 		run: function(data, template, parent){
@@ -296,6 +286,101 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			};
 		}
 	}
+
+    var genTranslator = {}, genTemplate = {}; // Todo: Generator._Translator = {} ... ?
+    var Generator = Mask.Generator = {
+
+        // produces js string from a js template and and a context holding additional info
+        render: function(template, context){
+            var tpl = this._template[template],
+                trl = this._translator,
+                key, key2, result;
+            context = context || {};
+            error(!tpl && this.debug, '(generator) The template' + template + 'do not exist.');
+
+            for(var i in tpl.key){
+                key = tpl.key[i];
+                key2 = key.toLowerCase();
+                tpl.tokens[i] = trl[key] && (result = trl[key].call(this, context, key)) !== undefined? result :
+                    trl[key2] && (result = trl[key2].call(this, context, key)) !== undefined? result :
+                    context[key] || context[key2] || key;
+            }
+
+            //return genTemplate[template].replace(/_([A-Z]+)_/g, function(sub, key){return trl[key]? trl[key].call(this, key, context) : context[key] || sub ; });
+            return tpl.tokens.join('');
+        },
+
+        addTemplate: function(key, template){
+            var match, keys, tpl = {tokens:[], key:{}}, prevIndex = 0, offset;
+            log(!!genTemplate[key], '(generator) Overwrite template "' + key + '"');
+            switch(typeof template){
+                case 'function':
+                    template = template.toString();
+
+                case 'string':
+                    match = this._keyList.exec(template) || {};
+                    keys = match[1]? match[1].split(/\s*,\s*/) : [];
+                    keys.push('_([A-Z]+)_');
+                    keys = new RegExp(keys.join('|') ,'g');
+
+                    template = template.slice(
+                        this._keyList.lastIndex || template.indexOf('{') + 1,
+                        template.lastIndexOf('}')
+                    );
+
+                    if((offset = this._offset.exec(template)[0]).length) template = template.replace(new RegExp('(^|\\n)' + this.esc(offset, true),'g'),'$1');
+
+                    while(match = keys.exec(template)){
+                        tpl.tokens.push(
+                            template.slice(prevIndex, match.index),
+                            undefined
+                        );
+                        tpl.key[tpl.tokens.length - 1] = match[1] || match[0];
+                        prevIndex = keys.lastIndex;
+                    }
+                    tpl.tokens.push(template.slice(prevIndex));
+
+                    this._template[key] = tpl;
+                    this._keyList.lastIndex = 0;
+                    break;
+
+                case 'object':
+                    this._template[key] = template;
+                    break;
+            }
+
+            return this;
+        },
+
+        addTranslator: function(key, fct){
+            log(!!this._translator[key], '(generator) Overwrite translator "' + key + '"');
+            this._translator[key] = fct;
+
+            return this;
+        },
+
+        esc: function(str){
+            return str
+                .replace(/[\\]/g, '\\\\')
+                .replace(/[\"]/g, '\\\"')
+                .replace(/[\/]/g, '\\/')
+                .replace(/[\b]/g, '\\b')
+                .replace(/[\f]/g, '\\f')
+                .replace(/[\n]/g, '\\n')
+                .replace(/[\r]/g, '\\r')
+                .replace(/[\t]/g, '\\t');
+        },
+
+        stringify: function(str){
+            return '"' + this.esc(str) + '"';
+        },
+
+        _template: {},
+        _translator: {},
+        _offset: /^[\s\t]*/,
+        _keyList: /\s*\/\*\*\s*@marker\s*\*\/\s*var\s*([^;]+)\s*;\n*/g
+    };
+
 
     var View = Mask.View = function(options){
         this.data = {};
@@ -384,6 +469,9 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
     View.create = function(options){ return new this(options)};
 
     View.template = function(){
+        /** @marker: */
+        var NAMESPACE, CONTENT;
+
         Mask.v['_NAMESPACE_'] = Mask.View.extend({
             render:function (data) {
                 var $ = this;
@@ -493,7 +581,15 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
             // on the server
             // TODO: put script to file here
+        },
+        error = function(cond, msg){
+            if(cond === true) throw new Error('maskjs error: ' + msg);
+        },
+        log = function(cond, msg){
+            cond === true && console && console.log && console.log('maskjs log: ' + msg);
         };
+
+
 
     View.extend = extend;
 	return Mask;

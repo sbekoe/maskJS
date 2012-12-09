@@ -4,9 +4,8 @@
  * @author Simon Bekoe
  * @version $Id$
  */
-
-window.Mask = window.Mask ||  (function(window, document, undefined){
-	"use strict";
+(function(window, document, undefined){
+	//"use strict";
 
 	var
 		/** @const */ NAMESPACE_DELIMITER = '.',
@@ -15,55 +14,17 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 		/** @const */ PATH_ATTR = RegExp('(?:^|\\' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')(\\w+)$'),
 		/** @const */ PATH_OBJ = RegExp('(\\w+)(?:$|' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')');
 
-	/**
-	 * Represents a Template
-	 * @constructor
-	 * @property {Array} tokens The compiled template
-	 * @property {String} template The template source
-	 * @property {Object} options The options for this template. They extend the default options.
-	 * @property {Compiler} tokenizer The tokenizer object initialized with options.pattern. tokenizer.exp contains the regExp to compile this template
-	 * @property {Scope} scope The Scope represents the data closure while rendering the template.
-	 * @param {String} template
-	 * @param {Object} options
-	 */
-	function Mask(template,options){
-		var opt = typeof options ==='object'? options : presets[options] || presets['default'];
-		this.template = template;
-//		this.options = _extend({}, defaults, presets[opt.preset]||{}, opt, true);
-		this.options = _.extend({}, defaults, presets[opt.preset]||{}, opt, true);
-		this.init();
-	}
+    var root = this,
+        prevMask = this.Mask;
+    /*
+    var _ = root._;
+    if (!_ && (typeof require !== 'undefined')) _ = require('underscore');
 
-	Mask.prototype = {
-		/**
-		 * Initialize the template by
-		 *   - building the tokenizer expression to detect markers
-		 *   - instantiating the data scope for rendering
-		 *   - compiling or using cache
-		 * @memberOf Mask#
-		 * @constructs
-		 * @this {Mask}
-		 */
-		init: function(){
-			this.tokenizer =  new Compiler(this); // rename to compiler
-			//this.scope = new Scope({},this.options.data);
-			//this.tokens = this.options.cache && cache[this.template]? cache[this.template] : (cache[this.template] = this.compile(this.template));
+    var Exp = root.Exp;
+    if (!Exp && (typeof require !== 'undefined')) Exp = require('underscore');
 
-/*
+    */
 
-            var
-                template = {source:'...', conf:{}, strip:'', tokens:[], stream:'', code:''},
-                parser = compiler.analyse(template), // extend conf and strip=screen(template)
-                stream = compiler.synthesize(template, parser),
-                code = compiler.generate(stream, tokens);
-*/
-
-		}
-
-	};
-
-
-    //*/
 	/**
 	 * Create new Compiler
 	 * Used to build the regexp to detect the markers of a template
@@ -77,16 +38,26 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 	 * @property {Object} captures
 	 * @property {String} parser
 	 */
-	function Compiler(mask){
+	var Compiler = function(mask) {
 		this.mask = mask;
 
-        this.analyse();
-        this.synthesize(this.mask.template);
-        this.generate();
+
+        this.define();
+        this.scan(this.mask.source); // TODO: this.mask.template -> this.source
+        this.parse();
 	}
 
+    // Multi-pass compiler
 	Compiler.prototype = {
-		analyse: function(){
+        compile: function(source){
+            this.source = source || this.source;
+
+            this.lexer = this.define(); // define() is kind of a scanner generator lexer = scanner
+            this.tokens = this.scan(); // lexical analyse // produces the stream also
+            this.abstract = this.parse(); // syntactic analyse. build abstract syntax tree
+        },
+
+		define: function(){
 			var
                 pattern = this.mask.options.pattern,
 				marker = this.mask.options.marker,
@@ -148,7 +119,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
             });
 		},
 
-		synthesize: function(template){
+		scan: function(template){
 			var
 				tokens,
 				objects = [],
@@ -167,7 +138,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 			return tokens;
 		},
 
-		generate: function(parent){
+		parse: function(parent){
 			var
 				parent = parent || {},
 				stream = parent.stream || this.stream,
@@ -199,7 +170,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 								references.push(namespace);
 								tokens.push("$.handle('" + namespace + "', '" + path + "')");
 								if(nested !== ''){
-									this.generate({stream:nested, namespace:path});
+									this.parse({stream:nested, namespace:path});
 								}
 							}else{
 								throw ('no opener found for the token: ' + token[0]);
@@ -221,77 +192,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
 	};
 
-	var
-		removeTemplate = Compiler.removeTemplate = function(namepsace){
-			delete Mask.template[namepsace];
-		};
 
+    var Generator = function(){};
 
-
-
-	// API
-
-	/**
-	 * Shorthand for new Mask(template, options)
-	 * @param {String} template
-	 * @param {Object} options
-	 * @returns {Mask}
-	 */
-	Mask.t = function(template,options){ return new Mask(template,options); };
-	//Mask.configure = function(space,settings){extend(Mask[space],settings,true);};
-	/** @deprecated */
-    Mask.template = {};
-    Mask.v = {};
-	Mask.render = function(template, data, scope){
-		return Renderer.run(data, template, scope);
-	};
-
-
-	var Renderer = Mask.Renderer = {
-		run: function(data, template, parent){
-			var tpl = Mask.template[template],
-				meta = {i:0, n:0}, // metadata scope provides runtime data
-				scope = Renderer.scope(meta, parent),
-				output;
-			if(tpl === undefined) return '';
-
-			output = _(makeArray(data))
-				.map(function(data, i, l){
-					meta.i = i;
-					meta.n = l.length;
-					return tpl.render(data, scope);
-				})
-				.join('');
-
-			delete meta.i, meta.n;
-
-			return output;
-		},
-
-		handle: function(namespace, scope, template){
-			var data = scope.data(namespace)
-			switch(typeof data){
-				case 'string':
-				case 'number': return data;
-				case 'object': return template? Renderer.run(data, template, scope) : '';
-				default: return '';
-			}
-		},
-
-		scope: function(data, parent){
-			parent = parent || {data: new Function}; // create parent context if necessary
-			return {
-				data: function(namespace){ return lookup(namespace, data, parent.data);},
-				parent: parent
-			};
-		}
-	}
-
-    var genTranslator = {}, genTemplate = {}; // Todo: Generator._Translator = {} ... ?
-    var Generator = Mask.Generator = {
+    Generator.prototype = {
 
         // produces js string from a js template and and a context holding additional info
-        render: function(template, context){
+        scan: function(template, context){
             var tpl = this._template[template],
                 trl = this._translator,
                 key, key2, result;
@@ -312,7 +219,10 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
         addTemplate: function(key, template){
             var match, keys, tpl = {tokens:[], key:{}}, prevIndex = 0, offset;
-            log(!!genTemplate[key], '(generator) Overwrite template "' + key + '"');
+            this._template || (this._template = {});
+
+            log(!!this._template[key], '(generator) Overwrite template "' + key + '"');
+
             switch(typeof template){
                 case 'function':
                     template = template.toString();
@@ -328,7 +238,8 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
                         template.lastIndexOf('}')
                     );
 
-                    if((offset = this._offset.exec(template)[0]).length) template = template.replace(new RegExp('(^|\\n)' + this.esc(offset, true),'g'),'$1');
+                    if((offset = this._offset.exec(template)[0]).length)
+                        template = template.replace(new RegExp('(^|\\n)' + Generator.esc(offset, true),'g'),'$1');
                     template = template.replace(/\s*$/,'');
                     while(match = keys.exec(template)){
                         tpl.tokens.push(
@@ -359,6 +270,13 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
             return this;
         },
 
+        _template: {},
+        _translator: {},
+        _offset: /^[\s\t]*/,
+        _keyList: /\s*\/\*\*\s*@marker\s*\*\/\s*var\s*([^;]+)\s*;\n*/g
+    };
+
+    _.extend(Generator,{
         esc: function(str){
             return str
                 .replace(/[\\]/g, '\\\\')
@@ -373,16 +291,17 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
         stringify: function(str){
             return '"' + this.esc(str) + '"';
-        },
-
-        _template: {},
-        _translator: {},
-        _offset: /^[\s\t]*/,
-        _keyList: /\s*\/\*\*\s*@marker\s*\*\/\s*var\s*([^;]+)\s*;\n*/g
-    };
+        }
+    });
 
 
-    var View = Mask.View = function(options){
+
+
+    /**
+     * class View
+     * @constructor
+     */
+    var View = function(options){
         this.data = {};
         this.meta = {}
         this.parent = {};
@@ -399,6 +318,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
 
     var viewOptions = ['data', 'meta', 'parent'];
 
+    /**  @constructs  View  */
     View.prototype = {
         initialize: function(){},
 
@@ -483,17 +403,38 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
         });
     }
 
+    var Mask  = function (template, options) {
+        var opt = typeof options ==='object'? options : presets[options] || presets['default'];
+        this.source = template;
+//		this.options = _extend({}, defaults, presets[opt.preset]||{}, opt, true);
+        this.options = _.extend({}, defaults, presets[opt.preset]||{}, opt, true);
+        this.init();
+    }
 
+    _.extend(Mask.prototype, {
+        init: function(){
+            this.tokenizer =  new Compiler(this); // rename to compiler
+        }
+    });
 
+    _.extend(Mask, {
+        View: View,
+        Generator: Generator,
 
+        t: function(template,options){ return new Mask(template,options); },
+        render: function(template, data, scope){ return Renderer.run(data, template, scope); },
+        noconflict: function(){ root.Mask = prevMask; return this; },
 
+        v: {}
+        });
 
-	var presets = Mask.presets = {},
-		defaults = Mask.defaults = {
-			data:{},
-			pattern:{
-				mustache:{ token:'{{%logic}}' }
-			},
+    // Utils
+    var presets = Mask.presets = {},
+        defaults = Mask.defaults = {
+            data:{},
+            pattern:{
+                mustache:{ token:'{{%logic}}' }
+            },
             wildcards: {
                 "id":"(#param:%ns)", // id for closing marker
                 "ns":"%w(?:\\.%w)*", // the namespace to be resolved while getting data
@@ -504,7 +445,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
                 "w":"\\w+", // word
                 "namespace":"%ns" // namespace
             },
-			marker:{
+            marker:{
                 "default": {
                     exp:'(#param:#namespace)'
                     //priority:0
@@ -513,12 +454,12 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
                     exp: "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:#namespace)(?:\\:(#param:%ns))?"
                 }
             },
-			preset:'html', // TODO: change this to 'default' when this preset is created
-			cache:true
-		},
+            preset:'html', // TODO: change this to 'default' when this preset is created
+            cache:true
+        },
 
-	    // Utilities
-		isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; },
+    // Utilities
+        isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; },
 
         makeArray = function(a) { return isArray(a)? a : [a]; },
 
@@ -542,7 +483,7 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
                         lookup && !hold? lookup(n) : undefined;     // recursive lookup
         },
 
-        // backbones extend function for inheritance
+    // backbones extend function for inheritance
         extend = function(protoProps, staticProps) {
             var parent = this;
             var child;
@@ -589,8 +530,10 @@ window.Mask = window.Mask ||  (function(window, document, undefined){
             cond === true && console && console.log && console.log('maskjs log: ' + msg);
         };
 
-
-
     View.extend = extend;
-	return Mask;
+
+    if(typeof module !== 'undefined') module.exports = Mask;
+    else root.Mask = Mask;
+
+    //return Mask;
 }(window, document));

@@ -19,13 +19,13 @@ function Compiler(mask){
     this.closer = [];
     this.logic = [];
     this.captures = {opener:1, closer:0, pattern:{}, marker:{}, id:0, i:2, length:0};
-    this.analyse();
-    this.synthesize(this.mask.template);
-    this.generate();
+    this.define();
+    this.scan(this.mask.template);
+    this.parse();
 }
 
 Compiler.prototype = {
-    analyse: function(){
+    define: function(){
         var pattern = this.mask.options.pattern,
             marker = this.mask.options.marker,
             captures = this.captures,
@@ -90,7 +90,7 @@ Compiler.prototype = {
         });
     },
 
-    synthesize: function(template){
+    scan: function(template){
         var
             tokens,
             objects = [],
@@ -109,7 +109,7 @@ Compiler.prototype = {
         return tokens;
     },
 
-    generate: function(parent){
+    parse: function(parent){
         var
             parent = parent || {},
             stream = parent.stream || this.stream,
@@ -139,7 +139,7 @@ Compiler.prototype = {
                         references.push(namespace);
                         tokens.push("handle('" + namespace + "', self, '" + path + "')");
                         if(nested !== ''){
-                            this.generate({stream:nested, namespace:path});
+                            this.parse({stream:nested, namespace:path});
                         }
                     }else{
                         throw ('no opener found for the token: ' + token[0]);

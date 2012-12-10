@@ -36,6 +36,8 @@
             this.lexer = this.define(); // define() is kind of a scanner generator lexer = scanner
             this.tokens = this.scan(); // lexical analyse // produces the stream also
             this.abstract = this.parse(); // syntactic analyse. build abstract syntax tree
+
+            return this.abstract;
         },
 
 		define: function(){
@@ -84,19 +86,19 @@
 				}
 			}
 
-			for(m in marker){if(marker.hasOwnProperty(m)){ markerOrder.push(m); }}
+			for(m in marker){if(marker.hasOwnProperty(m)){ markerOrder.push(m); marker[m].marker = m;}}
 			markerOrder.sort(function(l1,l2){
 				return marker[l2].priority - marker[l1].priority || marker[l2].exp.length - marker[l1].exp.length;
 			});
 
 			// build the selector regexp part
 			for(i=0; i<markerOrder.length; i++){
-				wildcards.logic.push(marker[markerOrder[i]].exp2 || marker[markerOrder[i]].exp);
+				wildcards.logic.push('('+marker[markerOrder[i]].exp+')>'+markerOrder[i]);
 			}
 
 			return new Exp(exp,{
                 wildcards:wildcards,
-                assignments:pattern
+                assignments:_.extend({},pattern,marker)
             });
 		},
 
@@ -123,7 +125,7 @@
 
 		parse: function(s,a){
 			var
-				abstract = a || {namespace: this.namespace || 'root', content:[[]]},
+				abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[[]]},
                 stream = s || this.stream,
 				namespace, path, child,
 				nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
@@ -133,45 +135,48 @@
                 ohash, // hash of an opener token
 				tokens = [],
 				nested,
-                i = 0,
                 viewTemplate = View.template.toString(),
                 view = viewTemplate.slice(viewTemplate.indexOf('{')+1, viewTemplate.lastIndexOf('}'));
 
 				while(hash = nextToken.exec(stream)){
+                    child = {namespace:'', content:[], token: [this.tokens[hash[2]]]};
+
 					switch(hash[1]){
 						case 'text':
 							tokens.push('"' + Generator.esc(this.tokens[hash[2]]) + '"');
-                            abstract.content[0].push(this.tokens[hash[2]]);
+                            child = this.tokens[hash[2]];
 							break;
-						case 'closer':
+                        case 'closer':
+                            //TODO: nextToken.mode('indexedOpener opener').update({wildcards:{type:hash[3], param:hash[4]})
 							nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ') .*('+ hash[4] + ').*$','gm'); // insert pattern and id/closer id
 							nextOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ').*$','gm'); // insert pattern
 							nextIndexedOpener.lastIndex = nextOpener.lastIndex = nextToken.lastIndex;
 
-                            child = {namespace:'', content:[], token: [this.tokens[hash[2]]]};
+							ohash = nextIndexedOpener.exec(stream) ||
+                                    nextOpener.exec(stream) ||
+                                    error(true, '(Compiler) No opener found for the token: ' + hash[0]);
 
-							if(ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream)){
-								nested = stream.slice(nextToken.lastIndex, ohash.index);
-								namespace = (this.tokens[ohash[2]]['$namespace'][0]||'');
-								child.namespace = path =  abstract.namespace + NAMESPACE_DELIMITER + namespace;
-								nextToken.lastIndex = ohash.index + ohash[0].length;
-								tokens.push("$.handle('" + namespace + "', '" + path + "')");
-                                //child.token.splice(0,0,this.tokens[ohash[2]])
-								if(nested !== ''){
-                                    child.content.splice(0, 0, []);
-                                    this.parse(nested, child)
-                                }
+                            child.token.splice(0, 0, this.tokens[ohash[2]]);
 
-                                abstract.content[0].push(child);
-							}else{
-								throw ('no opener found for the token: ' + hash[0]);
-							}
+                            nested = stream.slice(nextToken.lastIndex, ohash.index);
+                            namespace = (this.tokens[ohash[2]]['$namespace'][0]||'');
+                            child.namespace = path =  abstract.namespace + NAMESPACE_DELIMITER + namespace;
+                            nextToken.lastIndex = ohash.index + ohash[0].length;
+                            tokens.push("$.handle('" + namespace + "', '" + path + "')");
+                            if(nested !== ''){
+                                child.content.splice(0, 0, []);
+                                this.parse(nested, child);
+                            }
+
 							break;
 						case 'opener':
 							namespace = (this.tokens[hash[2]]['$namespace'][0]||'').split(NAMESPACE_DELIMITER_EXP);
 							tokens.push("$.handle('" + namespace + "')");
+
 							break;
 					}
+
+                    abstract.content[0].push(child);
 
 				}
             var generator = {
@@ -179,7 +184,8 @@
                 "NAMESPACE": abstract.namespace
             };
             appendScript(view.replace(/_([A-Z]+)_/g, function(marker, name){return generator[name] || marker ; }));
-            _.each(abstract.content, function(a){a.reverse()});
+            _.invoke(abstract.content,'reverse');
+
             return abstract;
 		}
 
@@ -190,26 +196,26 @@
     var Generator = {
 
         // produces js string from a js template and and a context holding additional info
-        generate: function(template, context){
-            var tpl = this._template[template],
+        generate: function(template, asbstract){
+            var tpl = this._template[template || this.option.template],
                 trl = this._translator,
                 key, key2, result;
-            context = context || {};
+            asbstract = asbstract || this.asbtract || {};
             error(!tpl && this.debug, '(generator) The template' + template + 'do not exist.');
 
             for(var i in tpl.key){
                 key = tpl.key[i];
                 key2 = key.toLowerCase();
-                tpl.tokens[i] = trl[key] && (result = trl[key].call(this, context, key)) !== undefined? result :
-                    trl[key2] && (result = trl[key2].call(this, context, key)) !== undefined? result :
-                    context[key] || context[key2] || key;
+                tpl.tokens[i] = trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
+                    trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
+                    asbstract[key] || asbstract[key2] || key;
             }
 
             //return genTemplate[template].replace(/_([A-Z]+)_/g, function(sub, key){return trl[key]? trl[key].call(this, key, context) : context[key] || sub ; });
             return tpl.tokens.join('');
         },
 
-        addTemplate: function(key, template){
+        addTemplate: function(template, key){
             var match, keys, tpl = {tokens:[], key:{}}, prevIndex = 0, offset;
             this._template || (this._template = {});
 
@@ -255,7 +261,7 @@
             return this;
         },
 
-        addTranslator: function(key, fct){
+        addTranslator: function(fct, key){
             log(!!this._translator[key], '(generator) Overwrite translator "' + key + '"');
             this._translator[key] = fct;
 
@@ -405,8 +411,46 @@
 
     _.extend(Mask.prototype, Compiler, Generator, {
         init: function(){
-            //this.tokenizer =  new Compiler(this); // rename to compiler
             this.compile();
+
+            _.each(this.options.templates, this.addTemplate, this);
+            _.each(this.options.translator, this.addTranslator, this);
+        },
+
+        register: function(source, template){
+            var code = this.generate(
+                    template || this.options.template,
+                    typeof source === 'string'? this.compile(source) : source
+                );
+
+            // in the browser
+            appendScript(code);
+
+            // on the server ...
+        },
+
+        _translator: {
+            content: function(abstract, key){
+                var c = abstract.content, marker = this.options.marker;
+                if(!c) return key;
+
+                return _.map(c, function(el){
+                    if(typeof el === 'string') return Generator.stringify(c);
+                    return  marker[abstract.token[0].marker].translator? marker[abstract.token[0].marker].translator.call(this, abstract, key) : this._translator.token.call(this, abstract, key);
+
+                }).join(' + ');
+            },
+
+            token: function(abstract, key){
+                var nested = !!abstract.content.length;
+
+                if(nested) this.register(abstract);
+
+                return "$.handle('" +
+                    abstract.token[0].$namespace + "'" +
+                    (nested? ", '" + abstract.namespace + "'" : "") +
+                ')';
+            }
         }
     });
 
@@ -440,13 +484,34 @@
             },
             marker:{
                 "default": {
-                    exp:'(#param:#namespace)'
+                    exp:'(#param:#namespace)',
+                    translator: function(abstract, key){
+                        return "$.handle(" + abstract.token[0]['$namespace'] + ")";
+                    }
                     //priority:0
                 },
+
                 "condition":{
                     exp: "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:#namespace)(?:\\:(#param:%ns))?"
                 }
             },
+            template: 'View',
+            templates:{
+                View: function() {
+                    /** @marker */ var NAMESPACE, CONTENT;
+
+                    Mask.v['NAMESPACE'] = Mask.View.extend({
+                        render:function (data) {
+                            var $ = this;
+                            if(data) $.data = data;
+
+                            return CONTENT;
+                        },
+                        initialize: function () {}
+                    });
+                }
+            },
+            translator:{},
             preset:'html', // TODO: change this to 'default' when this preset is created
             cache:true
         },

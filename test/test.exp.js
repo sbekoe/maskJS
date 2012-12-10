@@ -7,6 +7,27 @@
  */
 
 module('expJS');
+
+test('provide native unnamed captures',function(){
+    var exp, match;
+	exp = Exp.s(/(unnamed) (#capture:named) (unnamed)/);
+	match = exp.exec('unnamed named unnamed');
+	deepEqual(match, ['unnamed named unnamed', 'unnamed', 'named', 'unnamed']);
+	equal(match.$capture[0], 'named');
+
+    exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/);
+    match = exp.exec('unnamed named nonCaptured unnamed');
+    deepEqual(match, ['unnamed named nonCaptured unnamed', 'unnamed', 'named', 'unnamed']);
+});
+
+test('support of non-capturing parentheses',function(){
+    var exp, match;
+
+    exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/);
+    match = exp.exec('unnamed named nonCaptured unnamed');
+    deepEqual(match, ['unnamed named nonCaptured unnamed', 'unnamed', 'named', 'unnamed']);
+});
+
 test("nested captures and wildcards",function(){
 	var exp = new Exp('name is #name',{wildcards:{
 		name: '#firstName #lastName',
@@ -140,10 +161,41 @@ test('assignments',function(){
 			{age:10, gender:'m'},
 			{age:8, gender:'w'},
 			{age:1, gender:'w'}
-		]
-	)
+		],
+		'deprecated assignments api'
+	);
+
+
+	// inline assignments
+	exp = Exp.s(/(#person:Homer|Marge|Bart|Lisa|Maggie)>simpsons/g,{
+		assignments:{
+			"simpsons":{
+				Homer: {age:42, gender:'m'},
+				Marge: {age:34, gender:'w'},
+				Bart: {age:10, gender:'m'},
+				Lisa: {age:8, gender:'w'},
+				Maggie: {age:1, gender:'w'}
+			}
+		}
+	});
+
+	deepEqual(
+		exp.scan('Homer, Marge, Bart, Lisa, Maggie',function(match){
+			return {age: match.age, gender: match.gender};
+		}),
+		[
+			{age:42, gender:'m'},
+			{age:34, gender:'w'},
+			{age:10, gender:'m'},
+			{age:8, gender:'w'},
+			{age:1, gender:'w'}
+		],
+		'inline assignments selected by captured string'
+	);
 
 });
+
+
 
 //*/
 

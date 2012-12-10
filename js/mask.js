@@ -1,30 +1,23 @@
-/**
- * mask.js
- * @fileOverview fileDescription
- * @author Simon Bekoe
- * @version $Id$
- */
+//  maskjs 0.1
+
+//  (c) 2012 Simon Bekoe
+//  maskJS may be freely distributed under the MIT license.
+//  https://github.com/sbekoe/maskJS
+//  dependencies: underscorejs
+
+
 (function(window, document, undefined){
-  //"use strict";
 
   var
-    /** @const */ NAMESPACE_DELIMITER = '.',
-    /** @const */ NAMESPACE_DELIMITER_EXP = /\./g,
-    /** @const */ NAMESPACE_HOLD = ':',
-    /** @const */ PATH_ATTR = RegExp('(?:^|\\' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')(\\w+)$'),
-    /** @const */ PATH_OBJ = RegExp('(\\w+)(?:$|' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')');
+    NAMESPACE_DELIMITER = '.',
+    NAMESPACE_DELIMITER_EXP = /\./g,
+    NAMESPACE_HOLD = ':',
+    PATH_ATTR = RegExp('(?:^|\\' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')(\\w+)$'),
+    PATH_OBJ = RegExp('(\\w+)(?:$|' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')'),
 
-  var root = this,
+    root = this,
     prevMask = this.Mask;
 
-  /*
-   var _ = root._;
-   if (!_ && (typeof require !== 'undefined')) _ = require('underscore');
-
-   var Exp = root.Exp;
-   if (!Exp && (typeof require !== 'undefined')) Exp = require('underscore');
-
-   */
 
 
   // Multi-pass compiler

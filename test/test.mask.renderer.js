@@ -15,7 +15,7 @@ test('getData()',function(){
                 d:"e"
             }
         },
-        top = Mask.View.create({data:_top}),
+        top = new Mask.View({data:_top}),
 
         // initialize nested context
         _nested = {

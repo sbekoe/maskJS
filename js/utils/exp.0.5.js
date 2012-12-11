@@ -46,6 +46,7 @@ var Exp = (function(){
 		/** @const */ INJECTION_PREFIX = '%',
 		/** @const */ CAPTURE_PREFIX = '#',
 		/** @const */ ASSIGNMENT_PREFIX = '>',
+		/** @const */ ASSIGNMENT_EXP = new RegExp(ASSIGNMENT_PREFIX + '(\\w+)','g'),
 		/** @const */ ATTRIBUTE_PREFIX = '$',
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
@@ -129,7 +130,7 @@ var Exp = (function(){
 			var
 				source = isArray(source)? source : [source],
 				wc = this.wildcards,
-                _assignments = this.assignments,
+        _assignments = this.assignments,
 				needle = this._needle, // regexp to detect the (escaped) special characters.
 				escaped = this._escaped,
 				namespaces = namespaces || {},
@@ -181,12 +182,12 @@ var Exp = (function(){
 							src.slice(lastIndex, match.index),
 							(isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')'
 						);
-                        lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
+                        lastIndex = ASSIGNMENT_EXP.lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
 						// check for inline assignments
                         //*
-                         if(isCapture && (inlineAssignment = src.match(new RegExp(ASSIGNMENT_PREFIX + '(\\w+)'))) && _assignments[inlineAssignment[1]]){
-                            lastIndex += inlineAssignment[0].length;
-                            assignments[assignments.length-1] = _assignments[inlineAssignment[1]];
+            if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src)) && _assignments[inlineAssignment[1]]){
+              lastIndex += inlineAssignment[0].length;
+              assignments[assignments.length-1] = _assignments[inlineAssignment[1]];
 						}
                         //*/
 						// set the needles index back to

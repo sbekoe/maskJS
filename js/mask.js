@@ -77,14 +77,14 @@
       for(i=0; i<patternOrder.length; i++){
         p = pattern[patternOrder[i]];
         if (p.token && (part = parts.exec(p.token))) {
-          if (part['$delimiterL'][0]) {
-            wildcards.delimiterL.push('(' + Exp.esc(part.$delimiterL[0],true) + ')>' + patternOrder[i])
+          if (part['delimiterL'][0]) {
+            wildcards.delimiterL.push('(' + Exp.esc(part.delimiterL[0],true) + ')>' + patternOrder[i])
           }
-          if (part['$delimiterR'][0]) {
-            wildcards.delimiterR.push(Exp.esc(part['$delimiterR'][0],true));
+          if (part['delimiterR'][0]) {
+            wildcards.delimiterR.push(Exp.esc(part['delimiterR'][0],true));
           }
-          if (part['$closer'][0] || part['$delimiterR'][0]) {
-            wildcards.closer.push('(' + Exp.esc(part['$closer'][0]? part['$closer'][0].replace('%id','#id') : part['$delimiterR'][0], true) + (part['$closer_id'][0] ? ('|' + Exp.esc(part['$delimiterR'][0],true)) : '') + ')>' + patternOrder[i])
+          if (part['closer'][0] || part['delimiterR'][0]) {
+            wildcards.closer.push('(' + Exp.esc(part['closer'][0]? part['closer'][0].replace('%id','#id') : part['delimiterR'][0], true) + (part['closer_id'][0] ? ('|' + Exp.esc(part['delimiterR'][0],true)) : '') + ')>' + patternOrder[i])
           }
         }
       }
@@ -117,7 +117,7 @@
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return (match['$opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.$param.join(' ') || ''));
+        return (match['opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.param.join(' ') || ''));
       });
       if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
 
@@ -158,7 +158,7 @@
             child.token.splice(0, 0, this.tokens[ohash[2]]);
 
             nested = stream.slice(nextToken.lastIndex, ohash.index);
-            child.namespace = abstract.namespace + NAMESPACE_DELIMITER + (this.tokens[ohash[2]]['$namespace'][0]||'');
+            child.namespace = abstract.namespace + NAMESPACE_DELIMITER + (this.tokens[ohash[2]]['namespace'][0]||'');
             nextToken.lastIndex = ohash.index + ohash[0].length;
 
             if(nested !== ''){
@@ -444,7 +444,7 @@
         if(nested) this.register(abstract);
 
         return "$.handle('" +
-          abstract.token[0].$namespace + "'" +
+          abstract.token[0].namespace + "'" +
           (nested? ", '" + abstract.namespace + "'" : "") +
           ')';
       },

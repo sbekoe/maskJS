@@ -8,24 +8,33 @@
 
 module('expJS');
 
-test('provide native unnamed captures',function(){
+test('capturing & non-capturing',function(){
     var exp, match;
 	exp = Exp.s(/(unnamed) (#capture:named) (unnamed)/);
 	match = exp.exec('unnamed named unnamed');
-	deepEqual(match, ['unnamed named unnamed', 'unnamed', 'named', 'unnamed']);
-	equal(match.$capture[0], 'named');
+	deepEqual(match, {
+    0:['unnamed named unnamed'],
+    1:['unnamed'],
+    2:['named'],
+    3:['unnamed'],
+    capture:['named'],
+    index:0,
+    input:'unnamed named unnamed',
+    lastRange:[0,0],
+    range:[0,0]
+  },'provide native unnamed captures');
+	equal(match.capture[0], 'named');
 
     exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/);
     match = exp.exec('unnamed named nonCaptured unnamed');
-    deepEqual(match, ['unnamed named nonCaptured unnamed', 'unnamed', 'named', 'unnamed']);
-});
-
-test('support of non-capturing parentheses',function(){
-    var exp, match;
-
-    exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/);
-    match = exp.exec('unnamed named nonCaptured unnamed');
-    deepEqual(match, ['unnamed named nonCaptured unnamed', 'unnamed', 'named', 'unnamed']);
+    ok(
+      match[0] == 'unnamed named nonCaptured unnamed' &&
+      match[1] == 'unnamed' &&
+      match[2] == 'named' &&
+      match.capture == 'named' &&
+      match[3] == 'unnamed',
+      'support of non-capturing parentheses'
+    );
 });
 
 test("nested captures and wildcards",function(){
@@ -37,9 +46,9 @@ test("nested captures and wildcards",function(){
 	}});
 	var match = exp.exec('My name is Ted Mosby!');
 
-	equal(match.$, 'name is Ted Mosby', 'matched string');
-	equal(match.$name , 'Ted Mosby', 'named capture');
-	ok(match.$name_firstName =='Ted' && match.$name_lastName == 'Mosby', 'named nested captures');
+	equal(match[0], 'name is Ted Mosby', 'matched string');
+	equal(match.name , 'Ted Mosby', 'named capture');
+	ok(match.name_firstName =='Ted' && match.name_lastName == 'Mosby', 'named nested captures');
 });
 
 
@@ -53,8 +62,8 @@ test("multiple use of capture name",function(){
 	});
 	var match = exp.exec('123456');
 
-	ok(match.$ == '123', 'whole match');
-	deepEqual(match.$number_cypher,['1','2','3'],'');
+	ok(match[0] == '123', 'whole match');
+	deepEqual(match.number_cypher,['1','2','3'],'');
 });
 
 
@@ -84,7 +93,7 @@ test("escaping of special chars '%' and '#'",function(){
 
 	var match = exp.exec('[...] <div id="content">text</div> [...]');
 	ok(match,e.source + " to " + exp._exp.source);
-	deepEqual([match.$id[0],match.$text[0]],['content','text']);
+	deepEqual([match.id[0],match.text[0]],['content','text']);
 });
 
 
@@ -119,7 +128,7 @@ test("scanning, mapping and skipping",function(){
 		'<div id =    "content">content text</div>\n' +
 		'<div id="footer">footer text</div>\n',
 		function(match){
-			return match.$tag_id == 'skip'? Exp.skipper : 'tagname: '+ match.$tag_name + ', id: ' + match.$tag_id + ', content: ' + match.$tag_content;
+			return match.tag_id == 'skip'? Exp.skipper : 'tagname: '+ match.tag_name + ', id: ' + match.tag_id + ', content: ' + match.tag_content;
 		});
 
 	deepEqual(tokens,[
@@ -131,9 +140,9 @@ test("scanning, mapping and skipping",function(){
 
 test('named inline captures',function(){
 	var phone = Exp.s(/(#countrycode:\d+) (#areacode:%number) (#number:(?:\d+))/,{wildcards:{"areacode":/\d{4}/, number:/\d+/}}).exec('001 234 56789');
-	equal(phone.$countrycode, '001');
-	equal(phone.$areacode, '234');
-	equal(phone.$number, '56789');
+	equal(phone.countrycode, '001');
+	equal(phone.areacode, '234');
+	equal(phone.number, '56789');
 });
 
 //*

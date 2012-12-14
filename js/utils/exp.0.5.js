@@ -1,42 +1,9 @@
 /**
  * expJS - modular expressions
  * @author Simon Bekoe
- * @version 0.6
+ * @version 0.7
  * https://gist.github.com/3726969
  * http://jsbin.com/ogokog/20/edit
- *
- * Valid calls are:
- *     new Exp(string:expression, object:settings)	// e.g. new Exp("expression", {wildcards: {"keyword":"expression"}, flags:'igm'})
- *     new Exp(regExp:expression, object:settings)	// e.g. new Exp(/expression/igm, {wildcards: {"keyword":"expression"}})
- *     new Exp(object:settings) 					// e.g. new Exp({source: "expression", wildcards: {"keyword":"expression"}})
- *
- * Settings ([optional]):
- * 	{object} wildcards		object map with attributes specifying the keywords and values specifying the expressions the keyword is replaced through. e.g.:
- * 		{
- * 		 // Captures like #name will be stored in match.$tag_name
- * 		 // Here the %name will include the same expression like #expression but without capturing its match.
- * 		 "tag": /< #name\ id = "#id" >#content< \/%name>/,
- *
- * 		 // The expression assigned to a keyword can hold further injections and captures.
- * 		 // So the keywords are resolved recursive (since version 0.4).
- * 		 // If an keywords expression contains itslefs, an error event is thrown.
- * 		 "name": "%w",
- *
- * 		 "id": "%w",
- * 		 "content": ".*",
- *
- * 		 // a keywords first character can be the injetion or capture prefix "%"/"#".
- * 		 // In this case, it's allowd to use the keyword in expressions without prefixing it.
- * 		 // So in this example a whitespace respresents the expression \\s* and keeps the tag expression (above) cleaner.
- * 		 "% ": "\\s*",
- * 		 "w": "\\w+"
- * 		}
- *	{string} [flags]		the expressions flags delevered to new RegExp(epression, flags)
- *	{boolean} [global]		alternative to the flags option
- *	{boolean} [ignoreCase]	alternative to the flags option
- *	{boolean} [multiline]	alternative to the flags option
- *	{*} [defaultMatch]		if the excution fails the defaultMatch is returned instead of null
- *
  */
 
 var Exp = (function(){
@@ -47,7 +14,6 @@ var Exp = (function(){
 		/** @const */ CAPTURE_PREFIX = '#',
 		/** @const */ ASSIGNMENT_PREFIX = '>',
 		/** @const */ ASSIGNMENT_EXP = new RegExp(ASSIGNMENT_PREFIX + '(\\w+)','g'),
-		/** @const */ ATTRIBUTE_PREFIX = '$',
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
 
@@ -63,7 +29,7 @@ var Exp = (function(){
 		var settings = settings || exp || {};
 
 		// initial properties
-//		this.source = exp.source? exp.source.toString().slice(1,-1) : exp;
+    //this.source = exp.source? exp.source.toString().slice(1,-1) : exp;
 		this.source = exp.source? exp.source.toString() : exp;
 		this.global = exp.global || settings.global;
 		this.ignoreCase = exp.ignoreCase || settings.ignoreCase;
@@ -72,7 +38,7 @@ var Exp = (function(){
 		this.wildcards = settings.wildcards || {};
 		this.defaultMatch = settings.defaultMatch || null; // the defaultMatch is on RegExp execution if no match was found
 
-        this.assignments = settings.assignments || {};
+    this.assignments = settings.assignments || {};
 
 		// runtime properties
 		this.lastIndex = settings.lastIndex || 0;
@@ -99,17 +65,16 @@ var Exp = (function(){
 				names.push(w);
 			}}
 			this._captures = settings.captures || [''];
+      this._names = [''];
 			this._assignments = [{}];
 			this._escaped = escaped;
 			this._needle = new RegExp(
 				'\\\\(' + escaped.join('|') + ')|' +
-				//'(?:' +
-					'\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|' + // opener of named inline capture/injection
-					'(\\((?!\\?:))|' + // opening parenthesis for native capture resp. unnamed capture. but prevent from matching non-capturing parentheses: '(' but not '(?:'
-					'(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.sort(byLength).join('|')||'$^') + ')|' + // captures/injections named in wildcards
-					'(' + (captures.join('|')||'$^') + ')|' + // predefined captures named in wildcards
-					'(' + (injections.join('|')||'$^') + ')' + // predefined injections named in wildcards
-				//')(' + ASSIGNMENT_PREFIX + '\\w+)?' +
+        '\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|' + // opener of named inline capture/injection
+        '(\\((?!\\?:))|' + // opening parenthesis for native capture resp. unnamed capture. but prevent from matching non-capturing parentheses: '(' but not '(?:'
+        '(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.sort(byLength).join('|')||'$^') + ')|' + // captures/injections named in wildcards
+        '(' + (captures.join('|')||'$^') + ')|' + // predefined captures named in wildcards
+        '(' + (injections.join('|')||'$^') + ')' + // predefined injections named in wildcards
 				'', 'g'
 			);
 			this._exp = new RegExp(
@@ -133,7 +98,6 @@ var Exp = (function(){
         _assignments = this.assignments,
 				needle = this._needle, // regexp to detect the (escaped) special characters.
 				escaped = this._escaped,
-				namespaces = namespaces || {},
 
 				// The namespace is a stack containing the keywords of the nested captures and injections
 				// The name space is used to build the attribute name of a capture in a match. e.g: match.$keyword_nestedKeyword
@@ -147,49 +111,44 @@ var Exp = (function(){
 				match,
 				// the expression that replaces the keyword
 				replacement,
-				openers,
 				i,src,inlineAssignment;
+
 			for(i=0; i<source.length; i++){
 				src = source[i].hasOwnProperty('s')? source[i].s : source[i].hasOwnProperty('source')? source[i].source : source[i];
-//				src = source[i].s || source[i].source || source[i];
 				if(!src){return '';}
-//				if(!src){this.error('Empty Expression. Check the source or the "' + namespace[namespace.length-1] + '"wildcard');}
+
 				// disjunction of source elements
-				if(i>0){exp.push('|')}
+				if(i>0) exp.push('|');
+
 				while(match = needle.exec(src)) {
 					// do nothing if an escaped characters was detected, but on captures and injections
 					if (replacement = wc[match[6]] || wc[CAPTURE_PREFIX + match[7]] || wc[INJECTION_PREFIX + match[8]]  || (match[2]||match[4]? {s:findClosedReplacement(src.slice(needle.lastIndex)), a:source[i].a||source[i].assign} : false)) {
 						// check if the the keyword is a capture
 						isCapture = match[2] === CAPTURE_PREFIX || match[4] || match[5] === CAPTURE_PREFIX || typeof match[7] !== 'undefined';
-						keyword = match[3] || match[6] || match[7] || match[8] || captures.length;
+						keyword = match[3] || match[6] || match[7] || match[8] || '';
 						// check for infinity recursion and add the current keyword to the namespace
 						namespace.indexOf(keyword) === -1? namespace.push(keyword) : this.error('"'+ keyword + '" includes itself. This would end up in infinity recursion loop!');
 						ns = namespace.join(ATTRIBUTE_DELIMITER);
 						// store the keyword in the captures array if necessary
 						if(isCapture){
-                            captures.push(ns);
-                            /** @deprecated */
-                            assignments.push(replacement.a || replacement.assign || {});
-                        }
-
-						if(match[9]){
-
-						}
+              captures.push(ns);
+              this._names.push(keyword);
+              /** @deprecated */
+              assignments.push(replacement.a || replacement.assign || {});
+            }
 
 						// add the prepended native expression string and the replacement to the compiled expression
-						// the replacement expression is build recursive and wraped with ( ) for capturing or (?: ) for injection
+						// the replacement expression is build recursive and wrapped with ( ) for capturing or (?: ) for injection
 						exp.push(
 							src.slice(lastIndex, match.index),
 							(isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')'
 						);
                         lastIndex = ASSIGNMENT_EXP.lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
 						// check for inline assignments
-                        //*
             if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src)) && _assignments[inlineAssignment[1]]){
               lastIndex += inlineAssignment[0].length;
               assignments[assignments.length-1] = _assignments[inlineAssignment[1]];
 						}
-                        //*/
 						// set the needles index back to
 						needle.lastIndex = lastIndex
 						namespace.pop();
@@ -210,41 +169,41 @@ var Exp = (function(){
 		 * @return {array}
 		 */
 		exec: function(string){
-			var match,
-                i,
-                captures = this._captures,
-                assignments = this._assignments,
-                assignment,
-                namespace,
-                attribute,
-                attr,
-                a;
+			var
+        assignments = this._assignments,
+        match,
+        capture,
+        name,
+        assignment,
+        res;
+
 			this._exp.lastIndex = this.lastIndex;
 
 			if(match = this._exp.exec(string)){
+        res = {input:match.input, index:match.index}
 				this.lastIndex = this._exp.lastIndex;
-				match.lastRange = this.lastRange;
-				match.range = this.lastRange = [match.index, this._exp.lastIndex];
-				for(i = 0; i<captures.length; i++){
-					namespace = ATTRIBUTE_PREFIX + captures[i];
-					attribute = ATTRIBUTE_PREFIX + (attr = captures[i].slice(captures[i].lastIndexOf('_')+1));
+        res.lastRange = this.lastRange;
+        res.range = this.lastRange = [match.index, this._exp.lastIndex];
 
+				for(var i = 0; i < this._captures.length; i++){
+          name = this._names[i];
+          capture = this._captures[i];
 
-					if(!match[namespace]){ match[namespace] = [];}
-					if(!match[attribute]){ match[attribute] = [];}
-					if(typeof match[i] !== 'undefined'){
-						match[namespace].push(match[i]);
-						if(attribute !== namespace && captures.indexOf(attr) === -1){match[attribute].push(match[i]);}
-//						if(assignment = assignments[i]){for(a in assignment){
+          res[i] || (res[i] = [match[i]]);
+          res[capture]|| !capture || (res[capture] = []);
+          res[name] || !capture || (res[name] = []);
 
-						if(assignment = assignments[i][match[i]] || assignments[i]){for(a in assignment){
-							if(assignment.hasOwnProperty(a)){match[a] = assignment[a];}
+					if(typeof match[i] !== 'undefined' && capture){
+            res[capture].push(match[i]);
+						if(name !== capture && this._captures.indexOf(name) === -1){res[name].push(match[i]);}
+						if(assignment = assignments[i][match[i]] || assignments[i]){for(var a in assignment){
+							if(assignment.hasOwnProperty(a)){res[a] = assignment[a];}
 						}}
 					}
 				}
 			}
-			this.lastMatch = match || this.lastMatch;
-			return match || this.defaultMatch;
+			this.lastMatch = res || this.lastMatch;
+			return res || this.defaultMatch;
 		},
 		/**
 		 * check if the expression matches the given string

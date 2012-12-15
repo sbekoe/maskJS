@@ -1,9 +1,9 @@
 # API
-## Setup
+## Setup the Language
 ### Defining the Syntax
 ### Defining Logic
-### Registering Templates
-## Render Templates
+## Registering Templates
+## Render Templates / Creating Views
 ### Features
 * Automated organization of templates
   Each nested template is registered as independed template in the namespace of the parent template.

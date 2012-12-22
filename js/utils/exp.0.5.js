@@ -133,8 +133,6 @@ var Exp = (function(){
 						if(isCapture){
               captures.push(ns);
               this._names.push(keyword);
-              /** @deprecated */
-              assignments.push(replacement.a || replacement.assign || {});
             }
 
 						// add the prepended native expression string and the replacement to the compiled expression
@@ -147,7 +145,7 @@ var Exp = (function(){
 						// check for inline assignments
             if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src)) && _assignments[inlineAssignment[1]]){
               lastIndex += inlineAssignment[0].length;
-              assignments[assignments.length-1] = _assignments[inlineAssignment[1]];
+              assignments[captures.length-1] = inlineAssignment[1];
 						}
 						// set the needles index back to
 						needle.lastIndex = lastIndex
@@ -188,6 +186,7 @@ var Exp = (function(){
 				for(var i = 0; i < this._captures.length; i++){
           name = this._names[i];
           capture = this._captures[i];
+          assignment = this.assignments[assignments[i]]? this.assignments[assignments[i]][match[i]] || this.assignments[assignments[i]] : {};
 
           res[i] || (res[i] = [match[i]]);
           res[capture]|| !capture || (res[capture] = []);
@@ -196,9 +195,9 @@ var Exp = (function(){
 					if(typeof match[i] !== 'undefined' && capture){
             res[capture].push(match[i]);
 						if(name !== capture && this._captures.indexOf(name) === -1){res[name].push(match[i]);}
-						if(assignment = assignments[i][match[i]] || assignments[i]){for(var a in assignment){
+						for(var a in assignment){
 							if(assignment.hasOwnProperty(a)){res[a] = assignment[a];}
-						}}
+						}
 					}
 				}
 			}

@@ -145,9 +145,10 @@ test('named inline captures',function(){
 	equal(phone.number, '56789');
 });
 
-//*
+
 
 test('assignments',function(){
+  /*
 	var exp = Exp.s(/#person/g,{
 		wildcards:{
 			"person":[
@@ -173,7 +174,7 @@ test('assignments',function(){
 		],
 		'deprecated assignments api'
 	);
-
+//*/
 
 	// inline assignments
 	exp = Exp.s(/(#person:Homer|Marge|Bart|Lisa|Maggie)>simpsons/g,{
@@ -218,9 +219,6 @@ test('assignments',function(){
 
 });
 
-
-
-//*/
 
 //test('escaping Exp.esc',function(){});
 //test('expanding external source string Exp.expand',function(){});

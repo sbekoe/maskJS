@@ -3,9 +3,17 @@ module('Mask');
 test('render()', function(){
   var mask = new Mask({
     pattern:{
-      "default":	{token:'{{%s%logic%s}}'},
+      "mustache":	{token:'{{%s%logic%s}}'},
       "singleHtml":	{token:'<!--%s%logic%s/-->', priority:1},
       "html":		{token:'%ls<!--%s%logic%s-->%n%tmp%ls<!--%s/%id%s-->%n'}
+      /*
+      ,"html":		{
+        pattern:'<!-- #if%logic -->|<!-- /%id -->',
+        valid: function(abtract){
+          return abstract.token[0].name
+        }
+      }
+      //*/
     },
     cache:false
   });

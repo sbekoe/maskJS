@@ -65,10 +65,10 @@
           {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
           {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
         ),
-        part,id, closer,  i, p, m, t;
+        part, id, closer,  i, p, m, t;
 
       // sort patterns
-      for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); pattern[m].name = m;}}
+      for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); pattern[m].pattern = m;}}
       patternOrder.sort(function(m1,m2){
         return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length;
       });
@@ -78,7 +78,7 @@
         p = pattern[patternOrder[i]];
         if (p.token && (part = parts.exec(p.token))) {
           if (part['delimiterL'][0]) {
-            wildcards.delimiterL.push('(' + Exp.esc(part.delimiterL[0],true) + ')>' + patternOrder[i])
+            wildcards.delimiterL.push('(' + Exp.esc(part['delimiterL'][0],true) + ')>' + patternOrder[i])
           }
           if (part['delimiterR'][0]) {
             wildcards.delimiterR.push(Exp.esc(part['delimiterR'][0],true));
@@ -117,8 +117,9 @@
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return (match['opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.name || '')) + (' ' + (match.param.join(' ') || ''));
+        return (match['opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
       });
+
       if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
 
       this.stream = stream.reverse().join('\n');
@@ -488,8 +489,9 @@
         "w":"\\w+", // word
         "namespace":"%ns" // namespace
       },
+      //logic
       marker:{
-        "default": {
+        "pathOnly": {
           exp:'(#param:#namespace)'
 //                    translator: function(abstract, key){
 //                        return "$.handle('" + abstract.token[0]['$namespace'] + "')";

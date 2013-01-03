@@ -1,7 +1,7 @@
 # API
 ## Setup the Language
 ### Defining the Syntax
-´´´javascript
+```javascript
 var mask = new Mask({
   // [...]
   
@@ -15,21 +15,21 @@ var mask = new Mask({
   
   // [...]
 });
-´´´
+```
 Special chars in the syntax pattern:
-- `?` literal is a placeholder for the logic part. A plain `?` means, that any defined logic can take place. To allow only a selection list them in the way `?path?if?switch`.
-- `|` seperates the block parts in the pattern. The literal practialy represents the content between two block boundaries in the posterior template.
-- ` ` (only a singele white space char) will replaced by `[ \\t]*` in the lexers expression. So in the example above `{{block}}Content ... {{/block}}` would match the patter just as `{{ block }} Content ... {{ /block }}`.
+- ´?´ literal is a placeholder for the logic part. A plain ´?´ means, that any defined logic can take place. To allow only a selection list them in the way ´?path?if?switch´.
+- ´|´ seperates the block parts in the pattern. The literal practialy represents the content between two block boundaries in the posterior template.
+- ´ ´ (only a singele white space char) will replaced by ´[ \\t]*´ in the lexers expression. So in the example above ´{{block}}Content ... {{/block}}´ would match the patter just as ´{{ block }} Content ... {{ /block }}´.
 
 ### Defining Logic
-´´´javascript
+```javascript
 var mask = new Mask({
   // [...]
   
   logic:{
     "path": {
       pattern:'(#param:#namespace)'
-      //priority:0
+      // priority:0
     },
 
     "condition":{
@@ -42,7 +42,7 @@ var mask = new Mask({
   
   // [...]
 });
-´´´
+```
 ## Registering Templates
 ## Render Templates / Creating Views
 ### Features

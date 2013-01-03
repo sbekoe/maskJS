@@ -148,34 +148,6 @@ test('named inline captures',function(){
 
 
 test('assignments',function(){
-  /*
-	var exp = Exp.s(/#person/g,{
-		wildcards:{
-			"person":[
-				{source:"(#1:Homer)", assign:{age:42, gender:'m'}},
-				{source:"(#2:Marge)", assign:{age:34, gender:'w'}},
-				{s:"(#3:Bart)", a:{age:10, gender:'m'}},
-				{s:"(#4:Lisa)", a:{age:8, gender:'w'}},
-				{s:"(#5:Maggie)", a:{age:1, gender:'w'}}
-			]
-		}
-	});
-
-	deepEqual(
-		exp.scan('Homer, Marge, Bart, Lisa, Maggie',function(match){
-			return {age: match.age, gender: match.gender};
-		}),
-		[
-			{age:42, gender:'m'},
-			{age:34, gender:'w'},
-			{age:10, gender:'m'},
-			{age:8, gender:'w'},
-			{age:1, gender:'w'}
-		],
-		'deprecated assignments api'
-	);
-//*/
-
 	// inline assignments
 	exp = Exp.s(/(#person:Homer|Marge|Bart|Lisa|Maggie)>simpsons/g,{
 		assignments:{
@@ -218,7 +190,6 @@ test('assignments',function(){
   );
 
 });
-
 
 //test('escaping Exp.esc',function(){});
 //test('expanding external source string Exp.expand',function(){});

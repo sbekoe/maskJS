@@ -47,7 +47,6 @@
       var
         pattern = this.options.pattern,
         marker = this.options.marker,
-        nested = new RegExp('^(.+)' +  '%logic' + '(?:(.*)' + '%tmp' + ')(.+(%id).*|.+)$'),
         parts = new Exp({
           source: "^#delimiterL\\%logic(?:#delimiterR#nested)#closer|#delimiterL\\%logic#delimiterR?$",
           wildcards:{
@@ -58,50 +57,49 @@
             delimiterR:/.+/
           }
         }),
-        markerOrder = [],
-        patternOrder = [],
         exp = /#opener|#closer/gm,
         wildcards = _.extend(
           {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
           {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
         ),
-        part, id, closer,  i, p, m, t;
+        part, id, closer, p;
 
-      // sort patterns
-      for(m in pattern){if(pattern.hasOwnProperty(m)){ patternOrder.push(m); pattern[m].pattern = m;}}
-      patternOrder.sort(function(m1,m2){
-        return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length;
-      });
-
-      // split token into opener, divider & closer
-      for(i=0; i<patternOrder.length; i++){
-        p = pattern[patternOrder[i]];
-        if (p.token && (part = parts.exec(p.token))) {
-          if (part['delimiterL'][0]) {
-            wildcards.delimiterL.push('(' + Exp.esc(part['delimiterL'][0],true) + ')>' + patternOrder[i])
+      // sort patterns and split there tokens into opener, divider & closer
+      _.chain(pattern)
+        .keys()
+        .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
+        .each(function(key){
+          p = pattern[key];
+          p.pattern = key;
+          if (p.token && (part = parts.exec(p.token))) {
+            if (part['delimiterL']) {
+              wildcards.delimiterL.push('(' + Exp.esc(part['delimiterL'][0],true) + ')>s.' + key)
+            }
+            if (part['delimiterR']) {
+              wildcards.delimiterR.push(Exp.esc(part['delimiterR'][0],true));
+            }
+            if (part['closer'] || part['delimiterR']) {
+              wildcards.closer.push('(' + Exp.esc(part['closer']? part['closer'][0].replace('%id','#id') : part['delimiterR'][0], true) + (part['closer_id'] ? ('|' + Exp.esc(part['delimiterR'][0],true)) : '') + ')>s.' + key)
+            }
           }
-          if (part['delimiterR'][0]) {
-            wildcards.delimiterR.push(Exp.esc(part['delimiterR'][0],true));
-          }
-          if (part['closer'][0] || part['delimiterR'][0]) {
-            wildcards.closer.push('(' + Exp.esc(part['closer'][0]? part['closer'][0].replace('%id','#id') : part['delimiterR'][0], true) + (part['closer_id'][0] ? ('|' + Exp.esc(part['delimiterR'][0],true)) : '') + ')>' + patternOrder[i])
-          }
-        }
-      }
+        });
 
-      for(m in marker){if(marker.hasOwnProperty(m)){ markerOrder.push(m); marker[m].marker = m;}}
-      markerOrder.sort(function(l1,l2){
-        return marker[l2].priority - marker[l1].priority || marker[l2].exp.length - marker[l1].exp.length;
-      });
-
-      // build the selector regexp part
-      for(i=0; i<markerOrder.length; i++){
-        wildcards.logic.push('('+marker[markerOrder[i]].exp+')>'+markerOrder[i]);
-      }
+      // sort the markers/logic and build the selector regexp part
+      _.chain(marker)
+        .keys()
+        .sort(function(l1,l2){ return marker[l2].priority - marker[l1].priority || marker[l2].exp.length - marker[l1].exp.length; })
+        .each(function(key){
+          marker[key].marker = key;
+          wildcards.logic.push('('+marker[key].exp+')>l.' + key);
+        });
 
       return new Exp(exp,{
         wildcards:wildcards,
-        assignments:_.extend({},pattern,marker)
+        assignments: {
+          s: pattern,
+          l: marker
+        }
+//        assignments:_.extend({},pattern,marker)
       });
     },
 
@@ -117,7 +115,7 @@
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return (match['opener'][0]? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
+        return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
       });
 
       if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
@@ -448,11 +446,9 @@
           abstract.token[0].namespace + "'" +
           (nested? ", '" + abstract.namespace + "'" : "") +
           ')';
-      },
-
-      debug: true
-
-    }
+      }
+    },
+    debug: true
   });
 
   _.extend(Mask, {

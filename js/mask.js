@@ -48,40 +48,74 @@
         pattern = this.options.pattern,
         marker = this.options.marker,
         parts = new Exp({
-          source: "^#delimiterL\\%logic(?:#delimiterR#nested)#closer|#delimiterL\\%logic#delimiterR?$",
+          source: "^#delimiterL%logic(?:#delimiterR#content)#closer|#delimiterL%logic#delimiterR?$",
           wildcards:{
             closer:{source:".+#id.*|.+"},
             id:/\%id/,
-            nested:'\%tmp',
+            content:'\\|',
+            logic: '\\?',
             delimiterL:/.+/,
             delimiterR:/.+/
           }
         }),
-        exp = /#opener|#closer/gm,
-        wildcards = _.extend(
-          {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
-          {opener:'#delimiterL#logic#delimiterR', closer:[], delimiterL:[], delimiterR:[], logic:[]}
-        ),
-        part, id, closer, p;
+        splitter = new Exp({
+          source: "^#leftBound%logic#rightBound?$|^#leftBound?%logic#rightBound$",
+          wildcards:{
+            logic: '\\?|\\%id',
+            leftBound:/.+/,
+            rightBound:/.+/
+          }
+        }),
+        leftBound =  [],
+        rightBound =  [],
+        lb = [],
+        rb = [],
+        logic = [],
+        lexer = {
+          source: '#delimiterL#logic#delimiterR',
+          global: true,
+          multiline: true,
+          wildcards: _.extend(
+            {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
+            {opener:'#delimiterL#logic#delimiterR', delimiterL: leftBound, delimiterR:rightBound, logic: logic}
+          ),
+          assignments: {
+            s: pattern,
+            l: marker
+          }
+        };
 
       // sort patterns and split there tokens into opener, divider & closer
       _.chain(pattern)
         .keys()
         .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
         .each(function(key){
-          p = pattern[key];
-          p.pattern = key;
-          if (p.token && (part = parts.exec(p.token))) {
-            if (part['delimiterL']) {
-              wildcards.delimiterL.push('(' + Exp.esc(part['delimiterL'][0],true) + ')>s.' + key)
+          pattern[key].b = [];
+          _.each(pattern[key].token.replace(/ /g, '%s').split('|'), function(p, i, l){
+            var
+                part = splitter.exec(p),
+              uniqueLBound = -1 === _.indexOf(lb, part.leftBound[0]),
+              uniqueRBound = -1 === _.indexOf(rb, part.rightBound[0]);
+            error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + key);
+            log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + key);
+            pattern[key].b[i] = {
+              part: i,
+              syntax: key,
+              type: i !== 0 && i === l.length - 1? 'closer' : 'opener',
+              lb: part.leftBound,
+              rb: part.rightBound
             }
-            if (part['delimiterR']) {
-              wildcards.delimiterR.push(Exp.esc(part['delimiterR'][0],true));
+
+            if(part.leftBound){
+              lb.push(part.leftBound[0]);
+              leftBound.push('(' + Exp.esc(part.leftBound, true) + ')>s.' + key + '.b.' + i)
             }
-            if (part['closer'] || part['delimiterR']) {
-              wildcards.closer.push('(' + Exp.esc(part['closer']? part['closer'][0].replace('%id','#id') : part['delimiterR'][0], true) + (part['closer_id'] ? ('|' + Exp.esc(part['delimiterR'][0],true)) : '') + ')>s.' + key)
+
+            if(part.rightBound){
+              rb.push(part.rightBound[0]);
+              rightBound.push('(' + Exp.esc(part.rightBound, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + key + '.b.' + i)
             }
-          }
+          });
         });
 
       // sort the markers/logic and build the selector regexp part
@@ -90,17 +124,10 @@
         .sort(function(l1,l2){ return marker[l2].priority - marker[l1].priority || marker[l2].exp.length - marker[l1].exp.length; })
         .each(function(key){
           marker[key].marker = key;
-          wildcards.logic.push('('+marker[key].exp+')>l.' + key);
+          logic.push('('+marker[key].exp+')>l.' + key);
         });
 
-      return new Exp(exp,{
-        wildcards:wildcards,
-        assignments: {
-          s: pattern,
-          l: marker
-        }
-//        assignments:_.extend({},pattern,marker)
-      });
+      return new Exp(lexer);
     },
 
     scan: function(source){
@@ -115,7 +142,8 @@
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
+        return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.syntax || '')) + (' ' + (match.param.join(' ') || ''));
+//        return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
       });
 
       if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));

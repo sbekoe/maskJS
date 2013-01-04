@@ -15,7 +15,7 @@ var Exp = (function(){
 		/** @const */ ASSIGNMENT_PREFIX = '>',
     /** @const */ PATH_DELIMITER = '.',
     /** @const */ PATH = "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*",
-		/** @const */ ASSIGNMENT_EXP = new RegExp(ASSIGNMENT_PREFIX + '(' + PATH + ')','g'),
+		/** @const */ ASSIGNMENT_EXP = new RegExp('('+ASSIGNMENT_PREFIX + '{1,2})(' + PATH + ')','g'),
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
 
@@ -68,7 +68,8 @@ var Exp = (function(){
 			}}
 			this._captures = settings.captures || [''];
       this._names = [''];
-			this._assignments = [{}];
+			this._assignments = [{force:false, path:{}}];
+//			this._assignments = [{}];
 			this._escaped = escaped;
 			this._needle = new RegExp(
 				'\\\\(' + escaped.join('|') + ')|' +
@@ -150,7 +151,7 @@ var Exp = (function(){
 						// check for inline assignments
             if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src))){
               lastIndex += inlineAssignment[0].length;
-              assignments[captures.length-1] = inlineAssignment[1];
+              assignments[captures.length-1] = {force: 2 === inlineAssignment[1].length, path:inlineAssignment[2]};
 						}
 
 						// set the needles index back to
@@ -318,8 +319,14 @@ var Exp = (function(){
         result[name].push(capture);
       }
 
-      if(capture !== undefined && (a = resolvePath(this._assignments[index], this.assignments)))
-        _.extend(result, a[capture] || a);
+      if(capture !== undefined && this._assignments[index] && (a = resolvePath(this._assignments[index].path, this.assignments))){
+        a = a[capture] || a;
+        if(this._assignments[index].force)
+          _.extend(result, a)
+        else
+          for(var k in a)
+            if(result[k] === undefined) result[k] = a[k];
+      }
       return result;
     };
 

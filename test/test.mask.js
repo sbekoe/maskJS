@@ -2,10 +2,19 @@ module('Mask');
 
 test('render()', function(){
   var mask = new Mask({
-    pattern:{
-      "mustache":	{token:'{{%s%logic%s}}'},
-      "singleHtml":	{token:'<!--%s%logic%s/-->', priority:1},
-      "html":		{token:'%ls<!--%s%logic%s-->%n%tmp%ls<!--%s/%id%s-->%n'}
+    pattern: {
+      "mustache":	{
+        token:'{{ ? }}'
+      },
+      /*
+      "singleHtml":	{
+        token: '<!-- ? /-->',
+        priority:1
+      },
+        //*/
+      "html": {
+        token: '%ls<!-- ? -->%n|%ls<!-- /%id -->%n'
+      }
       /*
       ,"html":		{
         pattern:'<!-- #if%logic -->|<!-- /%id -->',

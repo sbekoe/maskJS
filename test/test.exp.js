@@ -189,6 +189,26 @@ test('assignments',function(){
     'multiple assignments'
   );
 
+  var
+    e = Exp.s(/(#c1:\d)>a1(#c2:\d)>>a2(#c3:\d)>a3/,{assignments:{
+      a1: {attr1:'test1'},
+      a2: {
+        attr1:'forced',
+        attr2:'test2'
+      },
+      a3: {
+        attr1:'test3',
+        attr3:'test3'
+      }
+    }}),
+    match = e.exec('123')
+
+  deepEqual(
+    [match.attr1, match.attr2, match.attr3],
+    ['forced', 'test2', 'test3'],
+    'soft & forced match extension'
+  );
+
 });
 
 //test('escaping Exp.esc',function(){});

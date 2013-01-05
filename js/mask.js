@@ -76,7 +76,8 @@
           global: true,
           multiline: true,
           wildcards: _.extend(
-            {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
+//            {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
+            this.options.wildcards,
             {opener:'#delimiterL#logic#delimiterR', delimiterL: leftBound, delimiterR:rightBound, logic: logic}
           ),
           assignments: {
@@ -95,7 +96,7 @@
             var
               part = splitter.exec(p),
               l = !part.leftBound? false : pattern[key].trimBlockBound? '%ls' + part.leftBound: part.leftBound[0],
-              r = !part.rightBound? false : pattern[key].trimBlockBound? part.rightBound + '%n' : part.rightBound[0],
+              r = !part.rightBound? false : pattern[key].trimBlockBound? part.rightBound + '%le' : part.rightBound[0],
               uniqueLBound = -1 === _.indexOf(lb, l),
               uniqueRBound = -1 === _.indexOf(rb, r);
 
@@ -167,10 +168,22 @@
         nextOpener,
         hash, // hash of a token
         ohash, // hash of an opener token
-        nested;
+        nested,
+        behaviour = {},
+        token;
 
       while(hash = nextToken.exec(stream)){
-        child = {namespace:'', content:[], token: [this.tokens[hash[2]]]};
+        token = this.tokens[hash[2]];
+        this.trigger('parse parse:' + token.marker,
+          token,
+          child = {namespace:'', content:[], token: []},
+          behaviour = {complete:true, valid:true}
+        );
+
+        if(!behaviour.valid) continue;
+        child.token.splice(0, 0, token);
+
+        behaviour = {};
 
         switch(hash[1]){
           case 'text':
@@ -181,21 +194,36 @@
             nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ') .*('+ hash[4] + ').*$','gm'); // insert pattern and id/closer id
             nextOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ').*$','gm'); // insert pattern
             nextIndexedOpener.lastIndex = nextOpener.lastIndex = nextToken.lastIndex;
-
+            /*
             ohash = nextIndexedOpener.exec(stream) ||
               nextOpener.exec(stream) ||
               error(this.debug, '(Compiler) No opener found for the token: ' + hash[0]);
+            //*/
 
-            child.token.splice(0, 0, this.tokens[ohash[2]]);
+            while(!behaviour.complete && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
+              token = this.tokens[ohash[2]];
 
-            nested = stream.slice(nextToken.lastIndex, ohash.index);
-            child.namespace = abstract.namespace + NAMESPACE_DELIMITER + (this.tokens[ohash[2]]['namespace'][0]||'');
-            nextToken.lastIndex = ohash.index + ohash[0].length;
+              this.trigger('parse parse:' + token.marker, token, child, behaviour = {
+                complete:true,
+                valid:true,
+                namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
+              });
 
-            if(nested !== ''){
-              child.content.splice(0, 0, []);
-              this.parse(nested, child);
+              nextIndexedOpener.lastIndex = nextOpener.lastIndex = ohash.index + ohash[0].length;
+
+              if(!behaviour.valid) continue;
+              child.token.splice(0, 0, token);
+
+              nested = stream.slice(nextToken.lastIndex, ohash.index);
+              child.namespace = abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
+              nextToken.lastIndex = ohash.index + ohash[0].length;
+
+              if(nested !== ''){
+                child.content.splice(0, 0, []);
+                this.parse(nested, child);
+              }
             }
+
 
             break;
           case 'opener':
@@ -424,7 +452,7 @@
     this.init(options);
   }
 
-  _.extend(Mask.prototype, Compiler, Generator, {
+  _.extend(Mask.prototype, Compiler, Generator, Backbone.Events,{
     init: function(options){
       options = _.isObject(options)? options : presets[options] || presets['default'];
 
@@ -434,6 +462,8 @@
 
       _.each(this.options.templates, this.addTemplate, this);
       _.each(this.options.translator, this.addTranslator, this);
+//      _(this.options.events).each(this.on,this);
+      this.on(this.options.events || {})
     },
 
     configure: function(){
@@ -511,11 +541,12 @@
         "id":"(#param:%ns)", // id for closing marker
         "ns":"%w(?:\\.%w)*", // the namespace to be resolved while getting data
         "ls":"(?:^[ \\t]*)?", // line start
-        "le":"(?:[ \\t]*\\n)?", // line end
+        "le":"\\n?", // line end
         "n":"\\n", // line break
         "s":"[ \\t]*", // white space (no line breaks)
         "w":"\\w+", // word
-        "namespace":"%ns" // namespace
+        "namespace":"%ns", // namespace
+        "path": "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*"
       },
       //logic
       marker:{
@@ -525,11 +556,13 @@
 //                        return "$.handle('" + abstract.token[0]['$namespace'] + "')";
 //                    }
           //priority:0
-        },
+        }
 
-        "condition":{
+       /*
+       ,"condition":{
           exp: "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:#namespace)(?:\\:(#param:%ns))?"
         }
+        //*/
       },
       template: 'View',
       templates:{

@@ -8,7 +8,7 @@ var mask = new Mask({
   syntax: {
     "mustache":  {
       pattern: '{{ ? }}|{{ / ?closer }}',
-      trimBlockEnds: true
+      trimBlockBound: true
       // generator: function(){}
     },
   }

@@ -1,4 +1,32 @@
 module('Mask');
+/*
+test('compile', function(){
+  var mask = new Mask({
+    pattern: {
+      "mustache": {
+        token: '{{ ?if?path }}|{{ ?if }}|{{ /?if?path }}'
+//        ,trimBlockBound : true
+      }
+    },
+    marker: {
+      'if':{
+        exp: 'if%s(#param:#namespace)',
+        translator: function(abstract, key){
+          return "$.handle('" + abstract.token[0]['$namespace'] + "')";
+        }
+      }
+    },
+    cache:false
+  });
+
+
+  mask.compile('{{if cond==1}} {{foo}} {{elseif cond==2}} {{bar}} {{endif}}')
+
+  ok(1);
+
+
+});
+*/
 
 test('render()', function(){
   var mask = new Mask({
@@ -13,7 +41,9 @@ test('render()', function(){
       },
         //*/
       "html": {
-        token: '%ls<!-- ? -->%n|%ls<!-- /%id -->%n'
+//        token: '%ls<!-- ? -->%n|%ls<!-- /%id -->%n'
+        token: '<!-- ? -->|<!-- /%id -->',
+        trimBlockBound : true
       }
       /*
       ,"html":		{

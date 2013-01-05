@@ -90,30 +90,34 @@
         .keys()
         .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
         .each(function(key){
-          pattern[key].b = [];
-          _.each(pattern[key].token.replace(/ /g, '%s').split('|'), function(p, i, l){
+          pattern[key]['behaviour'] = [];
+          _.each(pattern[key].token.replace(/ /g, '%s').split('|'), function(p, i, list){
             var
-                part = splitter.exec(p),
-              uniqueLBound = -1 === _.indexOf(lb, part.leftBound[0]),
-              uniqueRBound = -1 === _.indexOf(rb, part.rightBound[0]);
+              part = splitter.exec(p),
+              l = !part.leftBound? false : pattern[key].trimBlockBound? '%ls' + part.leftBound: part.leftBound[0],
+              r = !part.rightBound? false : pattern[key].trimBlockBound? part.rightBound + '%n' : part.rightBound[0],
+              uniqueLBound = -1 === _.indexOf(lb, l),
+              uniqueRBound = -1 === _.indexOf(rb, r);
+
+
             error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + key);
             log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + key);
-            pattern[key].b[i] = {
+            pattern[key]['behaviour'][i] = {
               part: i,
               syntax: key,
-              type: i !== 0 && i === l.length - 1? 'closer' : 'opener',
-              lb: part.leftBound,
-              rb: part.rightBound
+              type: i !== 0 && i === list.length - 1? 'closer' : 'opener',
+              lb: l,
+              rb: r
             }
 
             if(part.leftBound){
-              lb.push(part.leftBound[0]);
-              leftBound.push('(' + Exp.esc(part.leftBound, true) + ')>s.' + key + '.b.' + i)
+              lb.push(l);
+              leftBound.push('(' + Exp.esc(l, true) + ')>s.' + key + '.behaviour.' + i)
             }
 
             if(part.rightBound){
-              rb.push(part.rightBound[0]);
-              rightBound.push('(' + Exp.esc(part.rightBound, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + key + '.b.' + i)
+              rb.push(r);
+              rightBound.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + key + '.behaviour.' + i)
             }
           });
         });

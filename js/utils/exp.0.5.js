@@ -114,7 +114,7 @@ var Exp = (function(){
 				match,
 				// the expression that replaces the keyword
 				replacement,
-				i,src,inlineAssignment;
+				i,src,inlineAssignment, assignmentId;
 
 			for(i=0; i<source.length; i++){
 				src = source[i].hasOwnProperty('s')? source[i].s : source[i].hasOwnProperty('source')? source[i].source : source[i];
@@ -136,7 +136,7 @@ var Exp = (function(){
 
 						// store the keyword in the captures array if necessary
 						if(isCapture){
-              captures.push(ns);
+              assignmentId = captures.push(ns) - 1;
               this._names.push(keyword);
             }
 
@@ -151,7 +151,7 @@ var Exp = (function(){
 						// check for inline assignments
             if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src))){
               lastIndex += inlineAssignment[0].length;
-              assignments[captures.length-1] = {force: 2 === inlineAssignment[1].length, path:inlineAssignment[2]};
+              assignments[assignmentId] = {force: 2 === inlineAssignment[1].length, path:inlineAssignment[2]};
 						}
 
 						// set the needles index back to

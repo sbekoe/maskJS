@@ -264,7 +264,7 @@
       for(var i in tpl.key){
         key = tpl.key[i];
         key2 = key.toLowerCase();
-        tokens[i] = trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
+        tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
           trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
             asbstract[key] || asbstract[key2] || key;
       }
@@ -488,15 +488,35 @@
 
     _translator: {
       content: function(abstract, key){
-        var content = abstract.content[0],
-          marker = this.options.marker;
+        var
+          that = this,
+          content = abstract.content[0],
+          marker = this.options.marker,
+          blockBehaviour,
+          tokenBehaviour;
         if(!content) return key;
 
-        return _.map(content, function(el){
-          if(typeof el === 'string') return Generator.stringify(el);
-          return  marker[el.token[0].marker].translator? marker[el.token[0].marker].translator.call(this, el, key) : this._translator.token.call(this, el, key);
-
-        }, this).join(' + ');
+        return _.reduce(abstract.content, function(memo, content, index){
+          that.trigger('generate:block:' + abstract.token[index].marker,
+            blockBehaviour = {
+              content: _.map(content, function(el,j){
+                that.trigger('generate:token:' + abstract.token[index].marker,
+                  tokenBehaviour = {
+                    content: typeof el === 'string'? Generator.stringify(el) : marker[el.token[index].marker].translator? marker[el.token[index].marker].translator.call(that, el, key) : that._translator.token.call(that, el, key),
+                    index:j,
+                    abstract: abstract
+                  }
+                );
+                return tokenBehaviour.content;
+              }).join(' + '),
+              token: abstract.token[index],
+              index: index,
+              abstract: abstract
+            }
+          );
+          return memo + blockBehaviour.content;
+        },'');
+        //return content;
       },
 
       token: function(abstract, key){

@@ -18,6 +18,11 @@ test('compile()', function(){
       }
     },
 
+    templates:{
+      'getData': function(){ $.getData('_PATH_') },
+//      'if': function(){ ($.getData('_PATH1_') || '_PATH1_' _COND_ $.getData('_PATH2_') || '_PATH2_')? _CONTENT_ :}
+    },
+
     events:{
       'parse:if': function(token, abstract, behaviour) {
         var
@@ -33,6 +38,11 @@ test('compile()', function(){
 
         behaviour.complete = behaviour.complete && key === 'if';
 
+      },
+      'generate:block:if': function(e){
+        var
+          param = e.token.param;
+        if(param[0] === 'if' || param[0] === 'elseif') return '($.getData("'+'")' + + ')'
       }
     },
 

@@ -16,6 +16,7 @@ var Exp = (function(){
     /** @const */ PATH_DELIMITER = '.',
     /** @const */ PATH = "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*",
 		/** @const */ ASSIGNMENT_EXP = new RegExp('('+ASSIGNMENT_PREFIX + '{1,2})(' + PATH + ')','g'),
+		/** @const */ REPETITION_EXP = /\*|\{(\d+),?(\d*)(?:,([^\}])+)\}/,
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
 
@@ -68,7 +69,7 @@ var Exp = (function(){
 			}}
 			this._captures = settings.captures || [''];
       this._names = [''];
-			this._assignments = [{force:false, path:{}}];
+			this._assignments = [{aForce:false, aPath:{}}];
 //			this._assignments = [{}];
 			this._escaped = escaped;
 			this._needle = new RegExp(
@@ -146,12 +147,13 @@ var Exp = (function(){
 							src.slice(lastIndex, match.index),
 							(isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')'
 						);
-            lastIndex = ASSIGNMENT_EXP.lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
+            lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
 
 						// check for inline assignments
+            ASSIGNMENT_EXP.lastIndex = lastIndex;
             if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src))){
               lastIndex += inlineAssignment[0].length;
-              assignments[assignmentId] = {force: 2 === inlineAssignment[1].length, path:inlineAssignment[2]};
+              assignments[assignmentId] = {aForce: 2 === inlineAssignment[1].length, aPath:inlineAssignment[2]};
 						}
 
 						// set the needles index back to
@@ -319,9 +321,9 @@ var Exp = (function(){
         result[name].push(capture);
       }
 
-      if(capture !== undefined && this._assignments[index] && (a = resolvePath(this._assignments[index].path, this.assignments))){
+      if(capture !== undefined && this._assignments[index] && (a = resolvePath(this._assignments[index].aPath, this.assignments))){
         a = a[capture] || a;
-        if(this._assignments[index].force)
+        if(this._assignments[index].aForce)
           _.extend(result, a)
         else
           for(var k in a)

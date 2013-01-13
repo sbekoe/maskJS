@@ -6,26 +6,71 @@
  * To change this template use File | Settings | File Templates.
  */
 
-module('expJS');
+module('Exp');
+test('match obj extensions',function(){
+  var exp, match;
+  exp = Exp.s(/(unnamed) (#sub:foo) (#top:(#sub:bar))/,{
+    captureName: true, // default
+    captureIndices: true,
+    capturePaths: true
+  });
+  match = exp.exec('unnamed foo bar');
+  deepEqual(match, {
+    0:'unnamed foo bar',
+    1:'unnamed',
+    2:'foo',
+    3:'bar',
+    4:'bar',
+    'sub':['foo','bar'], // 'bar' will show up here also, because its capture has the same name
+    'top':['bar'],
+    'top_sub':['bar'], // path to the second #sub capture
+    index:0,
+    input:'unnamed foo bar',
+    lastRange:[0,0],
+    length: 5,
+    match: "unnamed foo bar",
+    range:[0,0]
+  },'extend match with capture names, capture indices and capture paths');
+
+  // only capture names
+  exp = Exp.s(/(unnamed) (#sub:foo) (#top:(#sub:bar))/);
+  match = exp.exec('unnamed foo bar');
+  deepEqual(match, {
+    'sub':['foo','bar'], // 'bar' will show up here also, because its capture has the same name
+    'top':['bar'],
+    index:0,
+    input:'unnamed foo bar',
+    lastRange:[0,0],
+    length: 5,
+    match: "unnamed foo bar",
+    range:[0,0]
+  },'extend match with with capture names only');
+});
 
 test('capturing & non-capturing',function(){
     var exp, match;
-	exp = Exp.s(/(unnamed) (#capture:named) (unnamed)/);
+	exp = Exp.s(/(unnamed) (#capture:named) (unnamed)/,{
+    captureIndices:true
+  });
 	match = exp.exec('unnamed named unnamed');
 	deepEqual(match, {
-    0:['unnamed named unnamed'],
-    1:['unnamed'],
-    2:['named'],
-    3:['unnamed'],
+    0:'unnamed named unnamed',
+    1:'unnamed',
+    2:'named',
+    3:'unnamed',
     capture:['named'],
     index:0,
     input:'unnamed named unnamed',
     lastRange:[0,0],
+    length: 4,
+    match: "unnamed named unnamed",
     range:[0,0]
   },'provide native unnamed captures');
 	equal(match.capture[0], 'named');
 
-    exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/);
+    exp = Exp.s(/(unnamed) (#capture:named) (?:nonCaptured) (unnamed)/,{
+      captureIndices:true
+    });
     match = exp.exec('unnamed named nonCaptured unnamed');
     ok(
       match[0] == 'unnamed named nonCaptured unnamed' &&
@@ -38,15 +83,18 @@ test('capturing & non-capturing',function(){
 });
 
 test("nested captures and wildcards",function(){
-	var exp = new Exp('name is #name',{wildcards:{
-		name: '#firstName #lastName',
-		firstName:'%w',
-		lastName:'%w',
-		w:'\\w+'
-	}});
+	var exp = new Exp('name is #name',{
+    wildcards:{
+      name: '#firstName #lastName',
+      firstName:'%w',
+      lastName:'%w',
+      w:'\\w+'
+    },
+    capturePaths:true
+  });
 	var match = exp.exec('My name is Ted Mosby!');
 
-	equal(match[0], 'name is Ted Mosby', 'matched string');
+	equal(match.match, 'name is Ted Mosby', 'matched string');
 	equal(match.name , 'Ted Mosby', 'named capture');
 	ok(match.name_firstName =='Ted' && match.name_lastName == 'Mosby', 'named nested captures');
 });
@@ -62,8 +110,8 @@ test("multiple use of capture name",function(){
 	});
 	var match = exp.exec('123456');
 
-	ok(match[0] == '123', 'whole match');
-	deepEqual(match.number_cypher,['1','2','3'],'');
+	ok(match.match == '123', 'whole match');
+	deepEqual(match.cypher,['1','2','3'],'');
 });
 
 
@@ -100,6 +148,7 @@ test("escaping of special chars '%' and '#'",function(){
 test("scanning, mapping and skipping",function(){
 	var exp = new Exp(/#tag/g,{
 		source: '#tag',
+    capturePaths: true,
 		wildcards:{
 			// Captures like #name will be stored in match.$tag_name
 			// Here the %name will include the same expression like #expression but without capturing its match.
@@ -211,5 +260,63 @@ test('assignments',function(){
 
 });
 
+test('repetitions', function(){
+  var e,m;
+    e = Exp.s(/(#list:(#number:\d))*$/,{
+      captureRepetition: true
+    });
+
+    m = e.exec('0123');
+//  ok(match.number[0] == 0 && match.number[1] == 1 && match.number[2] == 2 && match.number[3] == 3);
+  deepEqual(
+    [
+      m.list[0][0].number[0],
+      m.list[0][1].number[0],
+      m.list[0][2].number[0],
+      m.list[0][3].number[0]
+    ],
+    ['0','1','2','3'],
+    'repetition of a named inline capture'
+  );
+
+    e = Exp.s(/((#number:\d))*$/,{
+      captureRepetition: true,
+      captureIndices:true
+    });
+
+    m = e.exec('0123');
+//  ok(match.number[0] == 0 && match.number[1] == 1 && match.number[2] == 2 && match.number[3] == 3);
+  deepEqual(
+    [
+      m[1][0].number[0],
+      m[1][1].number[0],
+      m[1][2].number[0],
+      m[1][3].number[0]
+    ],
+    ['0','1','2','3'],
+    'repetition of a named capture'
+  );
+
+  e = Exp.s(/(#number:\d){0,, }$/,{
+    captureRepetition: true
+  });
+  m = e.exec('0 1 2 3');
+  deepEqual(
+    [
+      m.number[0][0].match,
+      m.number[0][1].match,
+      m.number[0][2].match,
+      m.number[0][3].match,
+    ],
+    ['0','1','2','3'],
+    'separated repetitions'
+  );
+
+  e = Exp.s(/(#number:\d){0, }$/,{
+    captureRepetition: true
+  });
+  m = e.exec('0 1 2 3');
+  equal(m.match,'', '0 separated repetitions');
+});
 //test('escaping Exp.esc',function(){});
 //test('expanding external source string Exp.expand',function(){});

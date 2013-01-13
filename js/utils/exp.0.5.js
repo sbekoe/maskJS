@@ -16,20 +16,32 @@ var Exp = (function(){
     /** @const */ PATH_DELIMITER = '.',
     /** @const */ PATH = "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*",
 		/** @const */ ASSIGNMENT_EXP = new RegExp('('+ASSIGNMENT_PREFIX + '{1,2})(' + PATH + ')','g'),
-		/** @const */ REPETITION_EXP = /\*|\{(\d+),?(\d*)(?:,([^\}])+)\}/,
+		/** @const */ REPETITION_EXP = /^[*+]|\{(\d+)(,?)(\d*)(?:,([^\}])+)?\}/,
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
 
 	"use strict";
 
+  var
+    defaults = {
+
+      // the attr to populate a match with
+      captureIndices: false,
+      capturePaths: false,
+      captureName: true,
+
+      captureRepetition: false
+    },
+    specialOpt = ['source'];
+
 	/**
 	 *  Epression class
 	 * @constructor
 	 * @param {String | RegExp | Object} exp
-	 * @param {Object} [settings] optional
+	 * @param {Object} [options] optional11
 	 */
-	function Exp(exp, settings){
-		var settings = settings || exp || {};
+	function Exp(exp, options){
+		var settings = options || exp || {};
 
 		// initial properties
     //this.source = exp.source? exp.source.toString().slice(1,-1) : exp;
@@ -37,7 +49,10 @@ var Exp = (function(){
 		this.global = exp.global || settings.global;
 		this.ignoreCase = exp.ignoreCase || settings.ignoreCase;
 		this.multiline = exp.multiline || settings.multiline;
-		this.flags = settings.flags || '';
+
+    this.options = _.extend({}, defaults, options, exp);
+//    _.extend(this, _.pick(this.options, specialOpt));
+    this.flags = settings.flags || '';
 		this.wildcards = settings.wildcards || {};
 		this.defaultMatch = settings.defaultMatch || null; // the defaultMatch is on RegExp execution if no match was found
 
@@ -67,10 +82,7 @@ var Exp = (function(){
 				if(w[0] === INJECTION_PREFIX){ w = w.slice(1); injections.push(w); escaped.push(w);}
 				names.push(w);
 			}}
-			this._captures = settings.captures || [''];
-      this._names = [''];
-			this._assignments = [{aForce:false, aPath:{}}];
-//			this._assignments = [{}];
+			this._captures = settings.captures || [{path:'', name:''}];
 			this._escaped = escaped;
 			this._needle = new RegExp(
 				'\\\\(' + escaped.join('|') + ')|' +
@@ -82,7 +94,7 @@ var Exp = (function(){
 				'', 'g'
 			);
 			this._exp = new RegExp(
-				this._captures.length>1?this.source : this.build(this.source, this._captures, this._assignments),
+				this._captures.length>1?this.source : this.build(this.source, this._captures),
 				this.flags || ((this.global? 'g' : '') + (this.ignoreCase? 'i' : '') + (this.multiline? 'm' : ''))
 			);
 		},
@@ -91,38 +103,38 @@ var Exp = (function(){
 		 * Build the expression string with replaced wildcards
 		 * @param {String} source
 		 * @param {Array} captures Filled with the names
-		 * @param {Object} assignments Filled with the names
 		 * @param {Array} [namespace] used internal for recursive call
 		 * @return {String} native RegExp source
 		 */
-		build: function(source, captures, assignments, namespace){
+		build: function(source, captures, namespace){
 			var
 				source = isArray(source)? source : [source],
 				wc = this.wildcards,
-        _assignments = this.assignments,
 				needle = this._needle, // regexp to detect the (escaped) special characters.
 				escaped = this._escaped,
 
 				// The namespace is a stack containing the keywords of the nested captures and injections
 				// The name space is used to build the attribute name of a capture in a match. e.g: match.$keyword_nestedKeyword
 				namespace = namespace || [],
-				ns,
+
 				// Contains the elements of the compiled expression
-				exp = [],
+				exp = '',
 				lastIndex = needle.lastIndex = 0,
 				keyword,
 				isCapture,
+        capture,
 				match,
 				// the expression that replaces the keyword
 				replacement,
-				i,src,inlineAssignment, assignmentId;
+        sub,
+				i, src, r, a, n, e;
 
 			for(i=0; i<source.length; i++){
 				src = source[i].hasOwnProperty('s')? source[i].s : source[i].hasOwnProperty('source')? source[i].source : source[i];
 				if(!src){return '';}
 
 				// disjunction of source elements
-				if(i>0) exp.push('|');
+				if(i>0) exp += '|';
 
 				while(match = needle.exec(src)) {
 					// do nothing if an escaped characters was detected, but on captures and injections
@@ -133,39 +145,59 @@ var Exp = (function(){
 
 						// check for infinity recursion and add the current keyword to the namespace
 						namespace.indexOf(keyword) === -1? namespace.push(keyword) : this.error('"'+ keyword + '" includes itself. This would end up in infinity recursion loop!');
-						ns = namespace.join(ATTRIBUTE_DELIMITER);
 
 						// store the keyword in the captures array if necessary
 						if(isCapture){
-              assignmentId = captures.push(ns) - 1;
-              this._names.push(keyword);
+              n = captures.push(capture = {name: keyword, path: namespace.join(ATTRIBUTE_DELIMITER)});
+              e = exp.length;
             }
 
 						// add the prepended native expression string and the replacement to the compiled expression
 						// the replacement expression is build recursive and wrapped with ( ) for capturing or (?: ) for injection
-						exp.push(
-							src.slice(lastIndex, match.index),
-							(isCapture ? '(' : '(?:') + this.build(replacement.s || replacement.source || replacement, captures, assignments, namespace) + ')'
-						);
-            lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
+						sub = this.build(replacement.s || replacement.source || replacement, captures, namespace);
+            exp += src.slice(lastIndex, match.index);
 
-						// check for inline assignments
+            lastIndex = match.index + match[0].length + (match[2]||match[4]? replacement.s.length + 1 : 0);
+						// check for assignments
             ASSIGNMENT_EXP.lastIndex = lastIndex;
-            if(isCapture && (inlineAssignment = ASSIGNMENT_EXP.exec(src))){
-              lastIndex += inlineAssignment[0].length;
-              assignments[assignmentId] = {aForce: 2 === inlineAssignment[1].length, aPath:inlineAssignment[2]};
-						}
+
+            if(isCapture && (a = ASSIGNMENT_EXP.exec(src))){
+              lastIndex += a[0].length;
+              capture.aForce = 2 === a[1].length;
+              capture.aPath = a[2];
+            }
+
+            // check for repetitions
+            //
+            // separated repetitions
+            // e.g a list of numbers (<\d>'s) separated by a whitespace
+            // - exactly 5:   /(\d){5, }/     -->   /(\d(?: \d){4})/      matches '0 1 2 3 4'
+            // - indefinite:  /(\d){0,, }/    -->   /(\d?(?: \d){0,})/    matches '0 1 2 3 4' and '1' and ''
+            // - 0 to 5:      /(\d){0,5, }/   -->   /(\d?(?: \d){0,4})/   matches matches '0 1' and '0 1 2 3 4'
+            if(isCapture && this.options.captureRepetition && (r = REPETITION_EXP.exec(src.slice(lastIndex)))){
+              var repConf = 0, repNumber = 1, repFinite = 2, repLimit = 3, repDelimiter = 4;
+              capture.rCapBound = [n, captures.length];
+              capture.rExpBound = [e + (r[repDelimiter]? 1 : 4), sub.length + (r[repDelimiter]? 1 : 4)];
+              if(r[repDelimiter])
+                sub = sub + (r[repNumber]!=0?'':r[repFinite]?'?':'{0}') + '(?:'+ r[repDelimiter] + sub + '){' + (r[repNumber]==0?0:r[repNumber]-1) + r[repFinite] + (r[repLimit]? r[repLimit]==0?0:r[repLimit]-1 :'') + '}';
+              else
+                sub = '(?:' + sub + ')' + r[repConf];
+
+              lastIndex += r[repConf].length;
+            }
+
+            exp += (isCapture ? '(' : '(?:') + sub + ')';
 
 						// set the needles index back to
 						needle.lastIndex = lastIndex
-						namespace.pop();
+            namespace.pop();
 					}
 				}
 				// add the appended native expression string to the compiled expression
-				exp.push(src.slice(lastIndex));
+				exp += src.slice(lastIndex);
 			}
 
-			return exp.join('').replace(new RegExp('\\\\(' + escaped.join('|') + ')','g'),'$1'); // replace escaped characters
+			return exp.replace(new RegExp('\\\\(' + escaped.join('|') + ')','g'),'$1'); // replace escaped characters
 		},
 
 		/**
@@ -189,7 +221,9 @@ var Exp = (function(){
           input:match.input,
           index:match.index,
           lastRange: this.lastRange,
-          range: (this.lastRange = [match.index, this._exp.lastIndex])
+          range: (this.lastRange = [match.index, this._exp.lastIndex]),
+          match: match[0],
+          length:match.length
         }, this);
 
 			}
@@ -307,23 +341,35 @@ var Exp = (function(){
 
     bindCapture = function(result, capture, index){
       var
-        c = this._captures[index],
-        name = this._names[index],
+        cap = this._captures[index],
+        c = cap.path,
+        name = cap.name,
         a;
-      result[index] || (result[index] = []);
-      result[index].push(capture);
-      if(c !== '' && capture !== undefined){
-        result[c] || (result[c] = []);
-        result[c].push(capture);
+
+      if(cap.rCapBound && cap.rExpBound){
+        capture = Exp.s({
+          source: this._exp.source.slice(cap.rExpBound[0], cap.rExpBound[1]),
+          captures: [{path:'', name:''}].concat(this._captures.slice(cap.rCapBound[0], cap.rCapBound[1])),
+          global:true
+        }).scan(capture);
       }
-      if(name !== c && capture !== undefined && this._captures.indexOf(name) === -1){
+
+      !this.options.captureIndices || (result[index] = capture);
+
+      if(this.options.captureName && c !== '' && capture !== undefined){
         result[name] || (result[name] = []);
+
         result[name].push(capture);
       }
 
-      if(capture !== undefined && this._assignments[index] && (a = resolvePath(this._assignments[index].aPath, this.assignments))){
+      if(this.options.capturePaths && ( name !== c) &&  c !== '' && capture !== undefined){
+        result[c] || (result[c] = []);
+        result[c].push(capture);
+      }
+
+      if(capture !== undefined && cap.aPath && (a = resolvePath(cap.aPath, this.assignments))){
         a = a[capture] || a;
-        if(this._assignments[index].aForce)
+        if(cap.aForce)
           _.extend(result, a)
         else
           for(var k in a)

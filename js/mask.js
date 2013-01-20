@@ -72,13 +72,15 @@
         rb = [],
         logic = [],
         lexer = {
-          source: '#delimiterL#logic#delimiterR',
+          source: '#delimiterL#logic'+ (this.options.multipleLogic? '{1,,\\s+}' : '') + '#delimiterR',
+//          source: '#delimiterL#logic#delimiterR',
           global: true,
           multiline: true,
+          captureRepetition: true,
           wildcards: _.extend(
 //            {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
             this.options.wildcards,
-            {opener:'#delimiterL#logic#delimiterR', delimiterL: leftBound, delimiterR:rightBound, logic: logic}
+            {delimiterL: leftBound, delimiterR:rightBound, logic: logic}
           ),
           assignments: {
             s: pattern,
@@ -463,7 +465,7 @@
       _.each(this.options.templates, this.addTemplate, this);
       _.each(this.options.translator, this.addTranslator, this);
 //      _(this.options.events).each(this.on,this);
-      this.on(this.options.events || {})
+      this.on(this.options.events || this.options.on || {})
     },
 
     configure: function(){
@@ -569,6 +571,7 @@
         "path": "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*"
       },
       //logic
+      multipleLogic:true,
       marker:{
         "pathOnly": {
           exp:'(#param:#namespace)'

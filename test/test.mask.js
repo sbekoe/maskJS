@@ -11,19 +11,24 @@ test('compile()', function(){
 
     marker: {
       'if':{
-        exp: '(#param:(#namespace:if))|(#param:if|elseif|else|endif)%s(#param:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)',
+        exp: '(#param:if|elseif|else|endif)%s(#param:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))',
+        priority: 5,
         translator: function(abstract, key){
           return "$.handle('" + abstract.token[0]['$namespace'] + "')";
         }
+      },
+      'with': {
+        exp: 'with test',
+        priority: 4
       }
     },
 
     templates:{
-      'getData': function(){ $.getData('_PATH_') },
+      'getData': function(){ $.getData('_PATH_') }
 //      'if': function(){ ($.getData('_PATH1_') || '_PATH1_' _COND_ $.getData('_PATH2_') || '_PATH2_')? _CONTENT_ :}
     },
 
-    events:{
+    on:{
       'parse:if': function(token, abstract, behaviour) {
         var
           key = token.param[0],
@@ -49,12 +54,11 @@ test('compile()', function(){
     cache:false
   });
 
-  mask.compile('{{if cond==1}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}')
-
-  var abstract = mask.abstract.content[0][0];
-
-  ok(abstract.content.length === 2);
-  ok(abstract.token.length === 3);
+  mask.compile('{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}')
+  var content = mask.abstract.content,
+    contentExists = content[0] && typeof content[0][0] === 'object';
+  ok(contentExists && content[0][0].content.length === 2);
+  ok(contentExists && content[0][0].token.length === 3);
 
 
 });

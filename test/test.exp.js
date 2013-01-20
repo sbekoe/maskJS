@@ -317,6 +317,25 @@ test('repetitions', function(){
   });
   m = e.exec('0 1 2 3');
   equal(m.match,'', '0 separated repetitions');
+
+  // repetition of named capture defined in wildcards
+  e = Exp.s(/#number{0,, }/,{
+    captureRepetition: true,
+    wildcards:{
+      'number': /\d/
+    }
+  });
+  m = e.exec('0 1 2 3');
+  deepEqual(
+    [
+      m.number[0][0].match,
+      m.number[0][1].match,
+      m.number[0][2].match,
+      m.number[0][3].match,
+    ],
+    ['0','1','2','3'],
+    'separated repetitions'
+  );
 });
 //test('escaping Exp.esc',function(){});
 //test('expanding external source string Exp.expand',function(){});

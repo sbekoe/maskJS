@@ -128,7 +128,7 @@
       // sort the markers/logic and build the selector regexp part
       _.chain(marker)
         .keys()
-        .sort(function(l1,l2){ return marker[l2].priority - marker[l1].priority || marker[l2].exp.length - marker[l1].exp.length; })
+        .sort(function(l1,l2){ return (marker[l2].priority||0) - (marker[l1].priority||0) || marker[l2].exp.length - marker[l1].exp.length; })
         .each(function(key){
           marker[key].marker = key;
           logic.push('('+marker[key].exp+')>l.' + key);

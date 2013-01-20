@@ -45,8 +45,8 @@
 
     define: function(){
       var
-        pattern = this.options.pattern,
-        marker = this.options.marker,
+        pattern = this.options.syntax,
+        marker = this.options.logic,
         parts = new Exp({
           source: "^#delimiterL%logic(?:#delimiterR#content)#closer|#delimiterL%logic#delimiterR?$",
           wildcards:{
@@ -90,24 +90,25 @@
 
       // sort patterns and split there tokens into opener, divider & closer
       _.chain(pattern)
-        .keys()
-        .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
-        .each(function(key){
-          pattern[key]['behaviour'] = [];
-          _.each(pattern[key].token.replace(/ /g, '%s').split('|'), function(p, i, list){
+//        .keys()
+//        .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
+        .sort(function(s1,s2){ return (s2.priority||0) - (s1.priority||0) || s2.token.length - s1.token.length; })
+        .each(function(s,index){
+          s['behaviour'] = [];
+          _.each(s.token.replace(/ /g, '%s').split('|'), function(p, i, list){
             var
               part = splitter.exec(p),
-              l = !part.leftBound? false : pattern[key].trimBlockBound? '%ls' + part.leftBound: part.leftBound[0],
-              r = !part.rightBound? false : pattern[key].trimBlockBound? part.rightBound + '%le' : part.rightBound[0],
+              l = !part.leftBound? false : s.trimBlockBound? '%ls' + part.leftBound: part.leftBound[0],
+              r = !part.rightBound? false : s.trimBlockBound? part.rightBound + '%le' : part.rightBound[0],
               uniqueLBound = -1 === _.indexOf(lb, l),
               uniqueRBound = -1 === _.indexOf(rb, r);
 
 
-            error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + key);
-            log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + key);
-            pattern[key]['behaviour'][i] = {
+            error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + s.skey);
+            log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + s.skey);
+            s['behaviour'][i] = {
               part: i,
-              syntax: key,
+              skey: s.skey,
               type: i !== 0 && i === list.length - 1? 'closer' : 'opener',
               lb: l,
               rb: r
@@ -115,23 +116,21 @@
 
             if(part.leftBound){
               lb.push(l);
-              leftBound.push('(' + Exp.esc(l, true) + ')>s.' + key + '.behaviour.' + i)
+              leftBound.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i)
             }
 
             if(part.rightBound){
               rb.push(r);
-              rightBound.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + key + '.behaviour.' + i)
+              rightBound.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i)
             }
           });
         });
 
       // sort the markers/logic and build the selector regexp part
       _.chain(marker)
-        .keys()
-        .sort(function(l1,l2){ return (marker[l2].priority||0) - (marker[l1].priority||0) || marker[l2].exp.length - marker[l1].exp.length; })
-        .each(function(key){
-          marker[key].marker = key;
-          logic.push('('+marker[key].exp+')>l.' + key);
+        .sort(function(l1,l2){ return (l2.priority||0) - (l1.priority||0) || l2.exp.length - l1.exp.length; })
+        .each(function(l, i){
+          logic.push('(' + l.exp + ')>l.' + i);
         });
 
       return new Exp(lexer);
@@ -149,7 +148,7 @@
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.syntax || '')) + (' ' + (match.param.join(' ') || ''));
+        return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.skey || '')) + (' ' + (match.param.join(' ') || ''));
 //        return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
       });
 
@@ -176,7 +175,7 @@
 
       while(hash = nextToken.exec(stream)){
         token = this.tokens[hash[2]];
-        this.trigger('parse parse:' + token.marker,
+        this.trigger('parse parse:' + token.lkey,
           token,
           child = {namespace:'', content:[], token: []},
           behaviour = {complete:true, valid:true}
@@ -205,7 +204,7 @@
             while(!behaviour.complete && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
               token = this.tokens[ohash[2]];
 
-              this.trigger('parse parse:' + token.marker, token, child, behaviour = {
+              this.trigger('parse parse:' + token.lkey, token, child, behaviour = {
                 complete:true,
                 valid:true,
                 namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
@@ -493,18 +492,19 @@
         var
           that = this,
           content = abstract.content[0],
-          marker = this.options.marker,
+          marker = this.options.logic,
           blockBehaviour,
           tokenBehaviour;
         if(!content) return key;
 
         return _.reduce(abstract.content, function(memo, content, index){
-          that.trigger('generate:block:' + abstract.token[index].marker,
+          that.trigger('generate:block:' + abstract.token[index].lkey,
             blockBehaviour = {
               content: _.map(content, function(el,j){
-                that.trigger('generate:token:' + abstract.token[index].marker,
+                that.trigger('generate:token:' + abstract.token[index].lkey,
                   tokenBehaviour = {
-                    content: typeof el === 'string'? Generator.stringify(el) : marker[el.token[index].marker].translator? marker[el.token[index].marker].translator.call(that, el, key) : that._translator.token.call(that, el, key),
+//                    content: typeof el === 'string'? Generator.stringify(el) : marker[el.token[index].lkey].translator? marker[el.token[index].lkey].translator.call(that, el, key) : that._translator.token.call(that, el, key),
+                    content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
                     index:j,
                     abstract: abstract
                   }
@@ -556,9 +556,9 @@
     },
     defaults = Mask.defaults = {
       data:{},
-      pattern:{
-        mustache:{ token:'{{%logic}}' }
-      },
+      syntax:[
+       { skey: 'mustache', token:'{{ ? }}'}
+      ],
       wildcards: {
         "id":"(#param:%ns)", // id for closing marker
         "ns":"%w(?:\\.%w)*", // the namespace to be resolved while getting data
@@ -572,21 +572,9 @@
       },
       //logic
       multipleLogic:true,
-      marker:{
-        "pathOnly": {
-          exp:'(#param:#namespace)'
-//                    translator: function(abstract, key){
-//                        return "$.handle('" + abstract.token[0]['$namespace'] + "')";
-//                    }
-          //priority:0
-        }
-
-       /*
-       ,"condition":{
-          exp: "(#param:%ns)(?:(#param:==|!=|<|>|<=|>=)(#param:%ns))?\\?(#param:#namespace)(?:\\:(#param:%ns))?"
-        }
-        //*/
-      },
+      logic:[
+        { lkey:'path', exp:'(#param:#namespace)' }
+      ],
       template: 'View',
       templates:{
         View: function() {

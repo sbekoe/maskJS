@@ -2,26 +2,14 @@ module('Mask');
 //*
 test('compile()', function(){
   var mask = new Mask({
-    pattern: {
-      "mustache": {
-        token: '{{ ? }}|{{ /? }}',
-        trimBlockBound : true
-      }
-    },
+    syntax: [
+     { skey: 'mustache', token: '{{ ? }}|{{ /? }}', trimBlockBound : true }
+    ],
 
-    marker: {
-      'if':{
-        exp: '(#param:if|elseif|else|endif)%s(#param:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))',
-        priority: 5,
-        translator: function(abstract, key){
-          return "$.handle('" + abstract.token[0]['$namespace'] + "')";
-        }
-      },
-      'with': {
-        exp: 'with test',
-        priority: 4
-      }
-    },
+    logic: [
+      { lkey:'if', exp: '(#param:if|elseif|else|endif)%s(#param:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))', priority: 5 },
+      { lkey:'with', exp: 'with (#param:%path)', priority: 4 }
+    ],
 
     templates:{
       'getData': function(){ $.getData('_PATH_') }
@@ -35,7 +23,7 @@ test('compile()', function(){
           type = token.type,
           length = abstract.token.length,
           validCloser = length === 0 && type === 'closer' && key === 'if',
-          validOpener = type === 'opener' && abstract.token[0].marker === 'if'  && ( (length === 1 && key === 'else') || (length && (key === 'if' || key === 'elseif')) );
+          validOpener = type === 'opener' && abstract.token[0].lkey === 'if'  && ( (length === 1 && key === 'else') || (length && (key === 'if' || key === 'elseif')) );
 
         behaviour.valid = behaviour.valid && (validCloser || validOpener);
 
@@ -67,16 +55,10 @@ test('compile()', function(){
 //*
 test('render()', function(){
   var mask = new Mask({
-    pattern: {
-      "mustache":	{
-        token:'{{ ? }}'
-      },
-      "html": {
-//        token: '%ls<!-- ? -->%n|%ls<!-- /%id -->%n'
-        token: '<!-- ? -->|<!-- /%id -->',
-        trimBlockBound : true
-      }
-    },
+    syntax: [
+      { skey: 'mustache',token:'{{ ? }}' },
+      { skey: 'html', token: '<!-- ? -->|<!-- /%id -->', trimBlockBound : true }
+    ],
     cache:false
   });
 

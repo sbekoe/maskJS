@@ -16,7 +16,7 @@ var Exp = (function(){
     /** @const */ PATH_DELIMITER = '.',
     /** @const */ PATH = "\\w+(?:\\.(?:\\w+|\\[\\d+\\]))*",
 		/** @const */ ASSIGNMENT_EXP = new RegExp('('+ASSIGNMENT_PREFIX + '{1,2})(' + PATH + ')','g'),
-		/** @const */ REPETITION_EXP = /^[*+]|\{(\d+)(,?)(\d*)(?:,([^\}])+)?\}/,
+		/** @const */ REPETITION_EXP = /^[*+]|^\{(\d+)(,?)(\d*)(?:,([^\}]+))?\}/,
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
 		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
 
@@ -93,10 +93,12 @@ var Exp = (function(){
         '(' + (injections.join('|')||'$^') + ')' + // predefined injections named in wildcards
 				'', 'g'
 			);
-			this._exp = new RegExp(
-				this._captures.length>1?this.source : this.build(this.source, this._captures),
-				this.flags || ((this.global? 'g' : '') + (this.ignoreCase? 'i' : '') + (this.multiline? 'm' : ''))
-			);
+
+      var
+        src = this._captures.length>1?this.source : this.build(this.source, this._captures),
+        flags = this.flags || ((this.global? 'g' : '') + (this.ignoreCase? 'i' : '') + (this.multiline? 'm' : ''));
+
+			this._exp = new RegExp(src, flags);
 		},
 
 		/**
@@ -177,10 +179,12 @@ var Exp = (function(){
             if(isCapture && this.options.captureRepetition && (r = REPETITION_EXP.exec(src.slice(lastIndex)))){
               var repConf = 0, repNumber = 1, repFinite = 2, repLimit = 3, repDelimiter = 4;
               capture.rCapBound = [n, captures.length];
-              capture.rExpBound = [e + (r[repDelimiter]? 1 : 4), sub.length + (r[repDelimiter]? 1 : 4)];
-              if(r[repDelimiter])
-                sub = sub + (r[repNumber]!=0?'':r[repFinite]?'?':'{0}') + '(?:'+ r[repDelimiter] + sub + '){' + (r[repNumber]==0?0:r[repNumber]-1) + r[repFinite] + (r[repLimit]? r[repLimit]==0?0:r[repLimit]-1 :'') + '}';
-              else
+              capture.rExpBound = [e + 4, e + sub.length + 4]; // sub will wrapped with '(?:<sub>)' and '(<sub>)' w.r.t. '((?:<sub>))...' => the original <sub> pattern starts at position 'e' with an offset of 4: the length of the left wrapper '((?:'
+              if(r[repDelimiter]){
+                // remove the captures in the repetition pattern
+                var repetition = Exp.parse(/(\\\(|\(\?[:=!])|\((?:#\w+:)?/g, sub, function(m){return m[1] || '(?:'}).join('');
+                sub = '(?:' + sub + ')' + (r[repNumber]!=0?'':r[repFinite]?'?':'{0}') + '(?:'+ r[repDelimiter] + '(?:' + repetition + ')' + '){' + (r[repNumber]==0?0:r[repNumber]-1) + r[repFinite] + (r[repLimit]? r[repLimit]==0?0:r[repLimit]-1 :'') + '}';
+              }else
                 sub = '(?:' + sub + ')' + r[repConf];
 
               lastIndex += r[repConf].length;
@@ -217,7 +221,7 @@ var Exp = (function(){
 			if(match = this._exp.exec(string)){
         this.lastIndex = this._exp.lastIndex;
 
-        res = _.reduce(match, bindCapture, {
+        res = _.reduce(match, matchExtender, {
           input:match.input,
           index:match.index,
           lastRange: this.lastRange,
@@ -268,8 +272,8 @@ var Exp = (function(){
 	 * @param {function(this:Exp,Array,Array): *} mapper the iterator function (optional)
 	 * @return {Array}
 	 */
-	Exp.scan = function(exp, string, mapper){
-		var tokens = [], token, match, lastIndex = exp.lastIndex;
+	var scan = Exp.scan = function(exp, string, mapper){
+		var tokens = [], token, match;
 		exp.lastIndex = 0;
 		if(exp.global){ while(match = exp.exec(string)){
 			token = mapper? mapper.call(exp, match, tokens) : match;
@@ -289,6 +293,18 @@ var Exp = (function(){
 		// exp.lastIndex = lastIndex; // TODO: proof sense
 		return null;
 	}
+
+  var parse = Exp.parse = function(exp, string, mapper){
+    var
+      lastIndex = 0,
+      tokens = scan(exp, string, function(match, tokens){
+        if(match.index !== lastIndex) tokens.push(string.slice(lastIndex, match.index));
+        lastIndex = exp.lastIndex;
+        return mapper? mapper.call(exp, match, tokens) : match;
+      });
+      if(lastIndex < string.length) tokens.push(string.slice(lastIndex));
+    return tokens;
+  }
 
 	/**
 	 * return Exp.breaker in iterators to quit the iteration loop.(scan, search)
@@ -339,13 +355,14 @@ var Exp = (function(){
       catch(e){ return undefined; }
     },
 
-    bindCapture = function(result, capture, index){
+    matchExtender = function(result, capture, index){
       var
         cap = this._captures[index],
         c = cap.path,
         name = cap.name,
         a;
 
+      // resolve repetitions
       if(cap.rCapBound && cap.rExpBound){
         capture = Exp.s({
           source: this._exp.source.slice(cap.rExpBound[0], cap.rExpBound[1]),
@@ -354,19 +371,23 @@ var Exp = (function(){
         }).scan(capture);
       }
 
+      // extend with capture index
       !this.options.captureIndices || (result[index] = capture);
 
+      // exetend with capture names
       if(this.options.captureName && c !== '' && capture !== undefined){
         result[name] || (result[name] = []);
 
         result[name].push(capture);
       }
 
+      // extend with capture path
       if(this.options.capturePaths && ( name !== c) &&  c !== '' && capture !== undefined){
         result[c] || (result[c] = []);
         result[c].push(capture);
       }
 
+      // extend with capture assignment
       if(capture !== undefined && cap.aPath && (a = resolvePath(cap.aPath, this.assignments))){
         a = a[capture] || a;
         if(cap.aForce)

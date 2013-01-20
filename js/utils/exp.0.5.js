@@ -367,6 +367,7 @@ var Exp = (function(){
         capture = Exp.s({
           source: this._exp.source.slice(cap.rExpBound[0], cap.rExpBound[1]),
           captures: [{path:'', name:''}].concat(this._captures.slice(cap.rCapBound[0], cap.rCapBound[1])),
+          assignments: this.assignments,
           global:true
         }).scan(capture);
       }

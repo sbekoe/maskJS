@@ -297,13 +297,23 @@ var Exp = (function(){
   var parse = Exp.parse = function(exp, string, mapper){
     var
       lastIndex = 0,
+      line = 0,
+      strip,
       tokens = scan(exp, string, function(match, tokens){
-        if(match.index !== lastIndex) tokens.push(string.slice(lastIndex, match.index));
+        strip = string.slice(lastIndex, match.index);
+        line += count(/\n/g, strip);
+        match.line || (match.line = line);
+        if(match.index !== lastIndex) tokens.push(strip);
+        line += count(/\n/g, match[0]||'');
         lastIndex = exp.lastIndex;
         return mapper? mapper.call(exp, match, tokens) : match;
       });
       if(lastIndex < string.length) tokens.push(string.slice(lastIndex));
     return tokens;
+  }
+
+  var count = Exp.count = function(exp, string){
+    return scan(exp, string).length;
   }
 
 	/**

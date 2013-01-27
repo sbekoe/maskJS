@@ -45,19 +45,6 @@
 
     define: function(){
       var
-        pattern = this.options.syntax,
-        marker = this.options.logic,
-        parts = new Exp({
-          source: "^#delimiterL%logic(?:#delimiterR#content)#closer|#delimiterL%logic#delimiterR?$",
-          wildcards:{
-            closer:{source:".+#id.*|.+"},
-            id:/\%id/,
-            content:'\\|',
-            logic: '\\?',
-            delimiterL:/.+/,
-            delimiterR:/.+/
-          }
-        }),
         splitter = new Exp({
           source: "^#leftBound%logic#rightBound?$|^#leftBound?%logic#rightBound$",
           wildcards:{
@@ -66,32 +53,34 @@
             rightBound:/.+/
           }
         }),
-        leftBound =  [],
-        rightBound =  [],
+
+        leftBound_exp =  [],
+        rightBound_exp =  [],
         lb = [],
         rb = [],
-        logic = [],
+        logic_exp = [],
+
         lexer = {
-          source: '#delimiterL#logic'+ (this.options.multipleLogic? '{1,,\\s+}' : '') + '#delimiterR',
-//          source: '#delimiterL#logic#delimiterR',
+          source: '#delimiterL#logic{1,,\\s+}#delimiterR',
           global: true,
           multiline: true,
           captureRepetition: true,
           wildcards: _.extend(
-//            {"id":"(#param:%ns)","ns":"%w(?:\\.%w)*","ls":"(?:^[ \\t]*)?","le":"(?:[ \\t]*\\n)?","n":"\\n","s":"[ \\t]*","w":"\\w+", "namespace":"%ns"},
             this.options.wildcards,
-            {delimiterL: leftBound, delimiterR:rightBound, logic: logic}
+            {
+              delimiterL: leftBound_exp,
+              delimiterR: rightBound_exp,
+              logic: logic_exp
+            }
           ),
           assignments: {
-            s: pattern,
-            l: marker
+            s: this.options.syntax,
+            l: this.options.logic
           }
         };
 
       // sort patterns and split there tokens into opener, divider & closer
-      _.chain(pattern)
-//        .keys()
-//        .sort(function(m1,m2){ return (pattern[m2].priority||0) - (pattern[m1].priority||0) || pattern[m2].token.length - pattern[m1].token.length; })
+      _.chain(this.options.syntax)
         .sort(function(s1,s2){ return (s2.priority||0) - (s1.priority||0) || s2.token.length - s1.token.length; })
         .each(function(s,index){
           s['behaviour'] = [];
@@ -106,6 +95,7 @@
 
             error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + s.skey);
             log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + s.skey);
+
             s['behaviour'][i] = {
               part: i,
               skey: s.skey,
@@ -116,21 +106,21 @@
 
             if(part.leftBound){
               lb.push(l);
-              leftBound.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i)
+              leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i)
             }
 
             if(part.rightBound){
               rb.push(r);
-              rightBound.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i)
+              rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i)
             }
           });
         });
 
       // sort the markers/logic and build the selector regexp part
-      _.chain(marker)
+      _.chain(this.options.logic)
         .sort(function(l1,l2){ return (l2.priority||0) - (l1.priority||0) || l2.exp.length - l1.exp.length; })
         .each(function(l, i){
-          logic.push('(' + l.exp + ')>l.' + i);
+          logic_exp.push('(' + l.exp + ')>l.' + i);
         });
 
       return new Exp(lexer);
@@ -161,6 +151,7 @@
 
     parse: function(s,a){
       var
+        that = this,
         abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[[]]},
         stream = s || this.stream,
         child,
@@ -175,11 +166,17 @@
 
       while(hash = nextToken.exec(stream)){
         token = this.tokens[hash[2]];
-        this.trigger('parse parse:' + token.lkey,
-          token,
-          child = {namespace:'', content:[], token: []},
-          behaviour = {complete:true, valid:true}
-        );
+        if(this.trigger){
+          this.trigger('parse:syntax:' + token.skey,
+            token,
+            child = {namespace:'', content:[], token: []},
+            behaviour = { complete:true, valid:true, namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : '' }
+          );
+
+          if(token.logic) _.each(token.logic[0],function(l){
+            this.trigger('parse:logic:' + l.lkey, token, child, behaviour, l);
+          }, this);
+        }
 
         if(!behaviour.valid) continue;
         child.token.splice(0, 0, token);
@@ -204,11 +201,17 @@
             while(!behaviour.complete && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
               token = this.tokens[ohash[2]];
 
-              this.trigger('parse parse:' + token.lkey, token, child, behaviour = {
-                complete:true,
-                valid:true,
-                namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
-              });
+              if(this.trigger){
+                this.trigger('parse:syntax:' + token.skey, token, child, behaviour = {
+                  complete:true,
+                  valid:true,
+                  namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
+                });
+
+                _.each(token.logic[0],function(l){
+                  this.trigger('parse:logic:' + l.lkey, token, child, behaviour, l);
+                }, this);
+              }
 
               nextIndexedOpener.lastIndex = nextOpener.lastIndex = ohash.index + ohash[0].length;
 
@@ -240,6 +243,7 @@
 
       return abstract;
     }
+
 
   };
 

@@ -1,6 +1,9 @@
 module('Mask');
 //*
 test('compile()', function(){
+  var api = {
+    eventParseSyntaxMustache: 0
+  };
   var mask = new Mask({
     syntax: [
      { skey: 'mustache', token: '{{ ? }}|{{ /? }}', trimBlockBound : true }
@@ -17,7 +20,7 @@ test('compile()', function(){
     },
 
     on:{
-      'parse:if': function(token, abstract, behaviour) {
+      'parse:logic:if': function(token, abstract, behaviour) {
         var
           key = token.param[0],
           type = token.type,
@@ -32,11 +35,18 @@ test('compile()', function(){
         behaviour.complete = behaviour.complete && key === 'if';
 
       },
+
+
+      'parse:logic:with':function(){console.log(arguments)},
+
       'generate:block:if': function(e){
         var
           param = e.token.param;
         if(param[0] === 'if' || param[0] === 'elseif') return '($.getData("'+'")' + + ')'
-      }
+      },
+
+      // api tests
+      'parse:syntax:mustache': function(){ api.eventParseSyntaxMustache++ }
     },
 
     cache:false
@@ -45,6 +55,10 @@ test('compile()', function(){
   mask.compile('{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}')
   var content = mask.abstract.content,
     contentExists = content[0] && typeof content[0][0] === 'object';
+
+  deepEqual({
+    eventParseSyntaxMustache: 5
+  }, api)
   ok(contentExists && content[0][0].content.length === 2);
   ok(contentExists && content[0][0].token.length === 3);
 

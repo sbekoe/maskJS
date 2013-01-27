@@ -18,7 +18,8 @@ var Exp = (function(){
 		/** @const */ ASSIGNMENT_EXP = new RegExp('('+ASSIGNMENT_PREFIX + '{1,2})(' + PATH + ')','g'),
 		/** @const */ REPETITION_EXP = /^[*+]|^\{(\d+)(,?)(\d*)(?:,([^\}]+))?\}/,
 		/** @const */ ATTRIBUTE_DELIMITER = '_',
-		/** @const */ DEBUG_MODE = true; // TODO: move to Exp.DEBUG_MODE
+		/** @const */ DEBUG_MODE = true, // TODO: move to Exp.DEBUG_MODE
+    /** @const */ SPLITTER = /,|\s+/;
 
 	"use strict";
 
@@ -83,10 +84,11 @@ var Exp = (function(){
 				names.push(w);
 			}}
 			this._captures = settings.captures || [{path:'', name:''}];
+      this.indices = {path:{}, name:{}};
 			this._escaped = escaped;
 			this._needle = new RegExp(
 				'\\\\(' + escaped.join('|') + ')|' +
-        '\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+):|' + // opener of named inline capture/injection
+        '\\((' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(\\w+(?:,\\w+)*):|' + // opener of named inline capture/injection
         '(\\((?!\\?:))|' + // opening parenthesis for native capture resp. unnamed capture. but prevent from matching non-capturing parentheses: '(' but not '(?:'
         '(' + CAPTURE_PREFIX + '|' + INJECTION_PREFIX + ')(' + (names.sort(byLength).join('|')||'$^') + ')|' + // captures/injections named in wildcards
         '(' + (captures.join('|')||'$^') + ')|' + // predefined captures named in wildcards
@@ -114,6 +116,8 @@ var Exp = (function(){
 				wc = this.wildcards,
 				needle = this._needle, // regexp to detect the (escaped) special characters.
 				escaped = this._escaped,
+        iName = this.indices.name,
+        iPath = this.indices.path,
 
 				// The namespace is a stack containing the keywords of the nested captures and injections
 				// The name space is used to build the attribute name of a capture in a match. e.g: match.$keyword_nestedKeyword
@@ -122,7 +126,7 @@ var Exp = (function(){
 				// Contains the elements of the compiled expression
 				exp = '',
 				lastIndex = needle.lastIndex = 0,
-				keyword,
+				keywords,
 				isCapture,
         capture,
 				match,
@@ -143,15 +147,17 @@ var Exp = (function(){
 					if (replacement = wc[match[6]] || wc[CAPTURE_PREFIX + match[7]] || wc[INJECTION_PREFIX + match[8]]  || (match[2]||match[4]? {s:findClosedReplacement(src.slice(needle.lastIndex)), a:source[i].a||source[i].assign} : false)) {
 						// check if the the keyword is a capture
 						isCapture = match[2] === CAPTURE_PREFIX || match[4] || match[5] === CAPTURE_PREFIX || typeof match[7] !== 'undefined';
-						keyword = match[3] || match[6] || match[7] || match[8] || '';
+						keywords = (match[3] || match[6] || match[7] || match[8] || '').split(',');
 
 						// check for infinity recursion and add the current keyword to the namespace
-						namespace.indexOf(keyword) === -1? namespace.push(keyword) : this.error('"'+ keyword + '" includes itself. This would end up in infinity recursion loop!');
+						namespace.indexOf(keywords[0]) === -1? namespace.push(keywords[0]) : this.error('"'+ keywords[0] + '" includes itself. This would end up in infinity recursion loop!');
 
 						// store the keyword in the captures array if necessary
 						if(isCapture){
-              n = captures.push(capture = {name: keyword, path: namespace.join(ATTRIBUTE_DELIMITER)});
+              n = captures.push(capture = {name: keywords[0], path: namespace.join(ATTRIBUTE_DELIMITER), aliases: _.rest(keywords)});
               e = exp.length;
+              (iName[keywords[0]] || (iName[keywords[0]] = [])).push(n - 1);
+              (iPath[capture.path] || (iName[capture.path] = [])).push(n - 1);
             }
 
 						// add the prepended native expression string and the replacement to the compiled expression
@@ -344,6 +350,54 @@ var Exp = (function(){
 
 	Exp.version = '0.6';
 
+
+  var Match = Exp.Match = function(match,exp){
+    this._wrapped = this._match = match;
+    this._exp = exp;
+  }
+
+  var result = function(obj, value){
+    if(obj._chain){
+      obj._wrapped = value;
+      return obj;
+    } else
+      return value;
+  }
+
+  Match.prototype = _.extend(_(null),{
+    capture: function(path){
+      var
+        a = _.isArray(path),
+        n = (a? path[0] : path).split(SPLITTER),
+        c = _.pick(this._match, _.union(_.pick(this._exp.indices.path, n), _.pick(this._exp.indices.name, n)));
+      return result(this, a? c : c[0]);
+    },
+
+    assignment: function(path){
+      var a = this._assignments || (this._assignments = this._getAssignments());
+      return path? resolvePath(path, a) : a;
+    },
+
+    _getAssignments: function(){
+      return _.reduce(this._match, function(res, cap, i){
+        var
+          cap = this._exp._captures[i],
+          path,
+          assignment,
+          a;
+        if(cap === undefined || !cap.aPath) return res;
+        assignment = resolvePath(path, this._exp.assignments);
+
+        for(a in assignment)
+          if(!cap.aForce && res[a] === undefined) res[a] = assignment[a];
+          else res[a] = assignment[a];
+
+        return res;
+      },{},this);
+    }
+  });
+
+
 	// helper
 	var
     isArray = Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]';},
@@ -374,12 +428,12 @@ var Exp = (function(){
 
       // resolve repetitions
       if(cap.rCapBound && cap.rExpBound){
-        capture = Exp.s({
-          source: this._exp.source.slice(cap.rExpBound[0], cap.rExpBound[1]),
-          captures: [{path:'', name:''}].concat(this._captures.slice(cap.rCapBound[0], cap.rCapBound[1])),
-          assignments: this.assignments,
-          global:true
-        }).scan(capture);
+          capture = Exp.s({
+            source: this._exp.source.slice(cap.rExpBound[0], cap.rExpBound[1]),
+            captures: [{path:'', name:''}].concat(this._captures.slice(cap.rCapBound[0], cap.rCapBound[1])),
+            assignments: this.assignments,
+            global:true
+          }).scan(capture);
       }
 
       // extend with capture index

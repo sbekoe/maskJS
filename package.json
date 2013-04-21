@@ -1,0 +1,43 @@
+{
+    "name": "mask",
+    "title": "mask.js",
+    "version": "0.1.0",
+    "description": "RegExp library based on underscore js",
+    "homepage": "https://github.com/sbekoe/maskjs",
+    "author": {
+      "name": "Simon Bekoe",
+      "email": "simon@bekoe.net"
+    },
+    "keywords": [
+        "Template Engine",
+        "Regular Expression",
+        "underscore",
+        "string"
+    ],
+    "main": "./exp.js",
+    "include": [
+        "README.md"
+    ],
+    "engines": {
+        "node": "*"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/sbekoe/maskjs.git"
+    },
+    "dependencies":{
+        "underscore": "1.4.3"
+    },
+    "devDependencies": {
+        "grunt": "~0.3.17"
+    },
+    "scripts": {
+        "test" : "grunt travis --verbose"
+    },
+    "bugs": {
+        "url": "https://github.com/sbekoe/exp.js/issues"
+    },
+    "licenses" : [
+        { "type" : "MIT" }
+    ]
+}

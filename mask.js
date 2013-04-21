@@ -11,23 +11,22 @@
   } else if (typeof define === 'function' && define.amd) {
     define(['underscore', 'backbone'], factory);
   } else {
-    var _ = root._;
-    var backbone = root.backbone;
-    root.Mask = factory(_, backbone);
+    root.Mask = factory(root._, root.Backbone);
   }
 
-}(this, function (_, backbone) {
+}(this, function (_, Backbone) {
 
 
-  var
-    NAMESPACE_DELIMITER = '.',
-    NAMESPACE_DELIMITER_EXP = /\./g,
-    NAMESPACE_HOLD = ':',
-    PATH_ATTR = RegExp('(?:^|\\' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')(\\w+)$'),
-    PATH_OBJ = RegExp('(\\w+)(?:$|' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')'),
+  // global constants
+var
+  NAMESPACE_DELIMITER = '.',
+  NAMESPACE_DELIMITER_EXP = /\./g,
+  NAMESPACE_HOLD = ':',
+  PATH_ATTR = RegExp('(?:^|\\' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')(\\w+)$'),
+  PATH_OBJ = RegExp('(\\w+)(?:$|' + NAMESPACE_DELIMITER + '|' + NAMESPACE_HOLD + ')'),
 
-    root = this,
-    prevMask = this.Mask;
+  root = this,
+  prevMask = this.Mask;
 
   var Compiler = (function(){
 
@@ -113,16 +112,16 @@
               type: i !== 0 && i === list.length - 1? 'closer' : 'opener',
               lb: l,
               rb: r
-            }
+            };
 
             if(part.leftBound){
               lb.push(l);
-              leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i)
+              leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i);  
             }
 
             if(part.rightBound){
               rb.push(r);
-              rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i)
+              rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i);
             }
           });
         });
@@ -296,7 +295,6 @@
       switch(typeof template){
         case 'function':
           template = template.toString();
-
         case 'string':
           match = this._keyList.exec(template) || {};
           keys = match[1]? match[1].split(/\s*,\s*/) : [];
@@ -372,7 +370,7 @@
   // The output classes will inherit from this class as default
   var View = function(options){
     this.data = {};
-    this.meta = {}
+    this.meta = {};
     this.parent = {};
     this.nested = [];
     this.index = 0;
@@ -424,7 +422,7 @@
     },
 
     handle: function(path, viewPath){
-      var data = this.getData(path)
+      var data = this.getData(path);
       switch(typeof data){
         case 'string':
         case 'number': return data;
@@ -456,19 +454,18 @@
       }
       this.options = options;
     }
+  };
 
-
-  }
-
-  View.create = function(options){ return new this(options)};
+  View.create = function(options){ return new this(options); };
   
   return View;
 })();
 
   var Mask = (function(){
+  
   var Mask  = function (options) {
     this.init(options);
-  }
+  };
 
   _.extend(Mask.prototype, Compiler, Generator, Backbone.Events,{
     init: function(options){
@@ -481,7 +478,7 @@
       _.each(this.options.templates, this.addTemplate, this);
       _.each(this.options.translator, this.addTranslator, this);
      // _(this.options.events).each(this.on,this);
-      this.on(this.options.events || this.options.on || {})
+      this.on(this.options.events || this.options.on || {});
     },
 
     configure: function(){
@@ -566,7 +563,7 @@
 
   
   var presets = Mask.presets = {
-      default:{}
+      "default":{}
     },
 
     defaults = Mask.defaults = {
@@ -613,105 +610,108 @@
 
   return Mask;
 })();
-  
 
-  // Utilities
-  var  options = function(obj) {
-      _.each(_(arguments).slice(1), function(source) {
-        if (source) {
-          for (var prop in source) {
-            if(_.isArray(source[prop]) && _.isArray(obj[prop])) {
-              obj[prop] = source[prop].concat(obj[prop]);
-            } else if(_.isObject(source[prop]) && _.isObject(obj[prop])) {
-              obj[prop] = options({}, obj[prop], source[prop]);
-            } else {
-              obj[prop] = source[prop];
-            }
+  // Helpers
+var 
+  options = function(obj) {
+    _.each(_(arguments).slice(1), function(source) {
+      if (source) {
+        for (var prop in source) {
+          if(_.isArray(source[prop]) && _.isArray(obj[prop])) {
+            obj[prop] = source[prop].concat(obj[prop]);
+          } else if(_.isObject(source[prop]) && _.isObject(obj[prop])) {
+            obj[prop] = options({}, obj[prop], source[prop]);
+          } else {
+            obj[prop] = source[prop];
           }
         }
-      });
-      return obj;
-    },
-
-    isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; },
-
-    makeArray = function(a) { return isArray(a)? a : [a]; },
-
-    resolve = Mask.resolve =  function(namespace, obj, delimitter){
-      delimitter = delimitter || NAMESPACE_DELIMITER_EXP;
-      obj = obj || window;
-      namespace = namespace.split(delimitter);
-      try{ return eval('(obj["' + namespace.join('"]["') + '"])'); }
-      catch(e){ return undefined; }
-    },
-
-    lookup = function(namespace, data, lookup, meta){
-      var r,
-        up = namespace[0] === NAMESPACE_DELIMITER,
-        hold = namespace[0] === NAMESPACE_HOLD,
-        n = namespace.slice(up || hold), // make use of native type cast (boolean to number) to strip the prefixes from the namespace
-        meta = meta || {};
-      return n === '' ? data :                                // current context
-        (r = data[n] || meta[n]) !== undefined? r :         // attr of current or meta context context
-          (r = resolve(n, data)) !== undefined? r :       // path in current context
-            lookup && !hold? lookup(n) : undefined;     // recursive lookup
-    },
-
-  // backbones extend function for inheritance
-    extend = function(protoProps, staticProps) {
-      var parent = this;
-      var child;
-
-      if (protoProps && _.has(protoProps, 'constructor')) {
-        child = protoProps.constructor;
-      } else {
-        child = function(){ parent.apply(this, arguments); };
       }
+    });
+    return obj;
+  },
 
-      _.extend(child, parent, staticProps);
+  isArray =  Array.isArray || function(a) { return Object.prototype.toString.call(a) === '[object Array]'; },
 
-      var Surrogate = function(){ this.constructor = child; };
-      Surrogate.prototype = parent.prototype;
-      child.prototype = new Surrogate;
+  makeArray = function(a) { return isArray(a)? a : [a]; },
 
-      if (protoProps) _.extend(child.prototype, protoProps);
+  resolve = Mask.resolve =  function(namespace, obj, delimitter){
+    delimitter = delimitter || NAMESPACE_DELIMITER_EXP;
+    obj = obj || window;
+    namespace = namespace.split(delimitter);
+    try{ return eval('(obj["' + namespace.join('"]["') + '"])'); }
+    catch(e){ return undefined; }
+  },
 
-      child.__super__ = parent.prototype;
+  lookup = function(namespace, data, lookup, meta){
+    var r,
+      up = namespace[0] === NAMESPACE_DELIMITER,
+      hold = namespace[0] === NAMESPACE_HOLD,
+      n = namespace.slice(up || hold), // make use of native type cast (boolean to number) to strip the prefixes from the namespace
+      m = meta || {};
+    return n === '' ? data :                                // current context
+      (r = data[n] || m[n]) !== undefined? r :         // attr of current or meta context context
+        (r = resolve(n, data)) !== undefined? r :       // path in current context
+          lookup && !hold? lookup(n) : undefined;     // recursive lookup
+  },
 
-      return child;
-    },
+// backbones extend function for inheritance
+  extend = function(protoProps, staticProps) {
+    var parent = this;
+    var child;
 
-    jsSource = /\.js/i,
+    if (protoProps && _.has(protoProps, 'constructor')) {
+      child = protoProps.constructor;
+    } else {
+      child = function(){ parent.apply(this, arguments); };
+    }
 
-    appendScript = function(src){
-      // in the browser
-      // http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
-      var head = document.getElementsByTagName('head'),
-        script = document.createElement('script');
+    _.extend(child, parent, staticProps);
 
-      script.type  = "text/javascript";
-      if (jsSource.test(script)) script.src = src;
-      else script.text = src;
+    var Surrogate = function(){ this.constructor = child; };
+    Surrogate.prototype = parent.prototype;
+    child.prototype = new Surrogate();
 
-      document.body.appendChild(script);
-      document.body.removeChild(document.body.lastChild);
+    if (protoProps) _.extend(child.prototype, protoProps);
 
-      // on the server
-      // TODO: put script to file here
-    },
+    child.__super__ = parent.prototype;
 
-    error = function(cond, msg){
-      if(cond === true) throw new Error('maskjs error: ' + msg);
-    },
+    return child;
+  },
 
-    log = function(cond, msg){
-      cond === true && console && console.log && console.log('maskjs log: ' + msg);
-    };
+  jsSource = /\.js/i,
+
+  appendScript = function(src){
+    // in the browser
+    // http://stackoverflow.com/questions/610995/jquery-cant-append-script-element
+    var head = document.getElementsByTagName('head'),
+      script = document.createElement('script');
+
+    script.type  = "text/javascript";
+    if (jsSource.test(script)) script.src = src;
+    else script.text = src;
+
+    document.body.appendChild(script);
+    document.body.removeChild(document.body.lastChild);
+
+    // on the server
+    // TODO: put script to file here
+  },
+
+  error = function(cond, msg){
+    if(cond === true) throw new Error('maskjs error: ' + msg);
+  },
+
+  log = function(cond, msg){
+    cond === true && console && console.log && console.log('maskjs log: ' + msg);
+  };
 
   View.extend = extend;
 
   Mask.View = View;
+
   Mask.Generator = Generator;
+
+  Mask.VERSION = '0.1.0';
 
   return Mask;
 }));

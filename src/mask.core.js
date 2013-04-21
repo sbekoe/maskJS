@@ -1,7 +1,8 @@
 var Mask = (function(){
+  
   var Mask  = function (options) {
     this.init(options);
-  }
+  };
 
   _.extend(Mask.prototype, Compiler, Generator, Backbone.Events,{
     init: function(options){
@@ -14,7 +15,7 @@ var Mask = (function(){
       _.each(this.options.templates, this.addTemplate, this);
       _.each(this.options.translator, this.addTranslator, this);
      // _(this.options.events).each(this.on,this);
-      this.on(this.options.events || this.options.on || {})
+      this.on(this.options.events || this.options.on || {});
     },
 
     configure: function(){
@@ -99,7 +100,7 @@ var Mask = (function(){
 
   
   var presets = Mask.presets = {
-      default:{}
+      "default":{}
     },
 
     defaults = Mask.defaults = {

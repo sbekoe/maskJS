@@ -82,16 +82,16 @@ var Compiler = (function(){
               type: i !== 0 && i === list.length - 1? 'closer' : 'opener',
               lb: l,
               rb: r
-            }
+            };
 
             if(part.leftBound){
               lb.push(l);
-              leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i)
+              leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i);  
             }
 
             if(part.rightBound){
               rb.push(r);
-              rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i)
+              rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i);
             }
           });
         });

@@ -34,7 +34,6 @@ var Generator = (function(){
       switch(typeof template){
         case 'function':
           template = template.toString();
-
         case 'string':
           match = this._keyList.exec(template) || {};
           keys = match[1]? match[1].split(/\s*,\s*/) : [];

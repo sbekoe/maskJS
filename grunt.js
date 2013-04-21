@@ -18,10 +18,12 @@ module.exports = function(grunt) {
         options: {
           variables: {
             version: '<%= pkg.version %>',
-            Compiler:'<%= grunt.file.read("src/compiler.core.js") %>',
-            Generator:'<%= grunt.file.read("src/generator.core.js") %>',
-            View:'<%= grunt.file.read("src/view.core.js") %>',
-            Mask:'<%= grunt.file.read("src/mask.core.js") %>'
+            compiler:'<%= grunt.file.read("src/compiler.core.js") %>',
+            generator:'<%= grunt.file.read("src/generator.core.js") %>',
+            view:'<%= grunt.file.read("src/view.core.js") %>',
+            mask:'<%= grunt.file.read("src/mask.core.js") %>',
+            constants:'<%= grunt.file.read("src/mask.constants.js") %>',
+            helpers:'<%= grunt.file.read("src/mask.helpers.js") %>'
           }
         },
         
@@ -42,7 +44,7 @@ module.exports = function(grunt) {
 
     concat: {
       dist:{
-        src: ['<banner:meta.banner>', '<file_strip_banner:src/<%= pkg.name %>.js>'],
+        src: ['<banner:meta.banner>', '<file_strip_banner:src/<%= pkg.name %>.factory.js>'],
         dest: '<%= pkg.name %>.js'
       }
     },
@@ -84,7 +86,10 @@ module.exports = function(grunt) {
         define: true,
         require: true,
         module: true,
-        exports: true
+        exports: true,
+        console: true,
+        Exp: true,
+        Backbone: true
       }
     },
     uglify: {}
@@ -92,7 +97,7 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-replace');
   // Default task.
   // grunt.registerTask('default', 'lint qunit concat min replace');
-  grunt.registerTask('default', 'lint qunit concat replace min');
+  grunt.registerTask('default', 'concat replace lint qunit min');
   grunt.registerTask('travis', 'lint qunit');
 
 };

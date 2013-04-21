@@ -3,7 +3,7 @@ var View = (function(){
   // The output classes will inherit from this class as default
   var View = function(options){
     this.data = {};
-    this.meta = {}
+    this.meta = {};
     this.parent = {};
     this.nested = [];
     this.index = 0;
@@ -55,7 +55,7 @@ var View = (function(){
     },
 
     handle: function(path, viewPath){
-      var data = this.getData(path)
+      var data = this.getData(path);
       switch(typeof data){
         case 'string':
         case 'number': return data;
@@ -87,11 +87,9 @@ var View = (function(){
       }
       this.options = options;
     }
+  };
 
-
-  }
-
-  View.create = function(options){ return new this(options)};
+  View.create = function(options){ return new this(options); };
   
   return View;
 })();

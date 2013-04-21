@@ -1,4 +1,4 @@
-/*! mask.js - v0.1.0 - 2013-04-21
+/*! mask.js - v0.1.1 - 2013-04-21
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
 
@@ -711,7 +711,7 @@ var
 
   Mask.Generator = Generator;
 
-  Mask.VERSION = '0.1.0';
+  Mask.VERSION = '0.1.1';
 
   return Mask;
 }));

@@ -22,37 +22,42 @@ test('compile()', function(){
     on:{
       'parse:logic:if': function(token, abstract, behaviour) {
         var
-          key = token.param[0],
-          type = token.type,
+          key = token.cap('param'),
+          type = token.atm('type'),
           length = abstract.token.length,
           validCloser = length === 0 && type === 'closer' && key === 'if',
-          validOpener = type === 'opener' && abstract.token[0].lkey === 'if'  && ( (length === 1 && key === 'else') || (length && (key === 'if' || key === 'elseif')) );
+          validOpener = type === 'opener' && ( (length === 1 && key === 'else') || (length && (key === 'if' || key === 'elseif')) ) && abstract.token[0].atm('lkey') === 'if' ;
 
         behaviour.valid = behaviour.valid && (validCloser || validOpener);
 
         if(!behaviour.valid) return;
 
+        // behaviour.complete = behaviour.complete && type === 'opener';
         behaviour.complete = behaviour.complete && key === 'if';
 
       },
 
 
-      'parse:logic:with':function(){console.log(arguments)},
+      'parse:logic:with':function(){
+        console.log(arguments)
+      },
 
       'generate:block:if': function(e){
         var
-          param = e.token.param;
-        if(param[0] === 'if' || param[0] === 'elseif') return '($.getData("'+'")' + + ')'
+          param = e.token.cap('param');
+        if(param === 'if' || param === 'elseif') return '($.getData("'+'")' + + ')'
       },
 
       // api tests
-      'parse:syntax:mustache': function(){ api.eventParseSyntaxMustache++ }
+      'parse:syntax:mustache': function(){
+        api.eventParseSyntaxMustache++;
+      }
     },
 
     cache:false
   });
-
-  mask.compile('{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}')
+  var template = '{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}';
+  mask.compile(template)
   var content = mask.abstract.content,
     contentExists = content[0] && typeof content[0][0] === 'object';
 
@@ -62,7 +67,7 @@ test('compile()', function(){
   ok(contentExists && content[0][0].content.length === 2);
   ok(contentExists && content[0][0].token.length === 3);
 
-
+  //mask.register(template);
 });
 //*/
 

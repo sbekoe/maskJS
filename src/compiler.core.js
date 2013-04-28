@@ -67,8 +67,10 @@ var Compiler = (function(){
           _.each(s.token.replace(/ /g, '%s').split('|'), function(p, i, list){
             var
               part = splitter.exec(p),
-              l = !part.leftBound? false : s.trimBlockBound? '%ls' + part.leftBound: part.leftBound[0],
-              r = !part.rightBound? false : s.trimBlockBound? part.rightBound + '%le' : part.rightBound[0],
+              part_lb = part.cap('leftBound'),
+              part_rb = part.cap('rightBound'),
+              l = !part_lb? false : s.trimBlockBound? '%ls' + part_lb: part_lb,
+              r = !part_rb? false : s.trimBlockBound? part_rb + '%le' : part_rb,
               uniqueLBound = -1 === _.indexOf(lb, l),
               uniqueRBound = -1 === _.indexOf(rb, r);
 
@@ -84,12 +86,12 @@ var Compiler = (function(){
               rb: r
             };
 
-            if(part.leftBound){
+            if(part_lb){
               lb.push(l);
               leftBound_exp.push('(' + Exp.esc(l, true) + ')>s.' + index + '.behaviour.' + i);  
             }
 
-            if(part.rightBound){
+            if(part_rb){
               rb.push(r);
               rightBound_exp.push('(' + Exp.esc(r, true) + ')' + (uniqueLBound? '>' : '>>') + 's.' + index + '.behaviour.' + i);
             }
@@ -118,7 +120,8 @@ var Compiler = (function(){
         if(text = src.slice(match.lastRange[1], match.range[0])){
           stream.push('text ' + (tokens.push(text)-1));
         }
-        return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.skey || '')) + (' ' + (match.param.join(' ') || ''));
+        // return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.skey || '')) + (' ' + (match.param.join(' ') || ''));
+        return match.atm('type') + ' ' + (tokens.push(match) - 1) + (' ' + (match.atm('skey') || '')) + (' ' + (match.cap(['param']).join(' ') || ''));
        // return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
       });
 
@@ -146,20 +149,33 @@ var Compiler = (function(){
 
       while(hash = nextToken.exec(stream)){
         token = this.tokens[hash[2]];
-        if(this.trigger){
-          this.trigger('parse:syntax:' + token.skey,
+        // if(this.trigger){
+        if(this.trigger && hash[1] !== 'text'){
+          this.trigger('parse:syntax:' + token.atm('skey'),
             token,
-            child = {namespace:'', content:[], token: []},
-            behaviour = { complete:true, valid:true, namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : '' }
+            child = {
+              namespace:'',
+              content:[],
+              token: []
+            },
+            behaviour = {
+              complete:true,
+              valid:true,
+              namespace: token.cap('namespace') || token.cap('param') || ''
+              // namespace: token.cap('namespace')? token.cap('namespace')[0] : token.cap('param')? token.cap('param')[0] : ''
+            }
           );
 
-          if(token.logic) _.each(token.logic[0],function(l){
-            this.trigger('parse:logic:' + l.lkey, token, child, behaviour, l);
+          // if(token.cap('logic')) _.each(token.cap(['logic']), function(l){
+          if(token.cap('logic')) token.cap('logic').each( function(l){
+            this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
           }, this);
         }
 
-        if(!behaviour.valid) continue;
-        child.token.splice(0, 0, token);
+        if(!behaviour.valid && hash[1] !== 'text')
+          continue;
+
+        
 
         behaviour = {};
 
@@ -168,6 +184,7 @@ var Compiler = (function(){
             child = this.tokens[hash[2]];
             break;
           case 'closer':
+            child.token.splice(0, 0, token);
             //TODO: nextToken.mode('indexedOpener opener').update({wildcards:{type:hash[3], param:hash[4]})
             nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ') .*('+ hash[4] + ').*$$','gm'); // insert pattern and id/closer id
             nextOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ').*$$','gm'); // insert pattern
@@ -182,14 +199,16 @@ var Compiler = (function(){
               token = this.tokens[ohash[2]];
 
               if(this.trigger){
-                this.trigger('parse:syntax:' + token.skey, token, child, behaviour = {
+                this.trigger('parse:syntax:' + token.atm('skey'), token, child, behaviour = {
                   complete:true,
                   valid:true,
-                  namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
+                  namespace: token.cap('namespace') || token.cap('param') || ''
+                  // namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
                 });
 
-                _.each(token.logic[0],function(l){
-                  this.trigger('parse:logic:' + l.lkey, token, child, behaviour, l);
+                token.cap('logic').each(function(l){
+                // _.each(token.cap('logic'), function(l){
+                  this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
                 }, this);
               }
 
@@ -211,7 +230,7 @@ var Compiler = (function(){
 
             break;
           case 'opener':
-
+            child.token.splice(0, 0, token);
             break;
         }
 

@@ -42,32 +42,39 @@ var Mask = (function(){
       content: function(abstract, key){
         var
           that = this,
-          content = abstract.content[0],
-          marker = this.options.logic,
           blockBehaviour,
-          tokenBehaviour;
-        if(!content) return key;
+          tokenBehaviour,
+          lkey;
 
-        return _.reduce(abstract.content, function(memo, content, index){
-          that.trigger('generate:block:' + abstract.token[index].lkey,
-            blockBehaviour = {
-              content: _.map(content, function(el,j){
-                that.trigger('generate:token:' + abstract.token[index].lkey,
-                  tokenBehaviour = {
-//                    content: typeof el === 'string'? Generator.stringify(el) : marker[el.token[index].lkey].translator? marker[el.token[index].lkey].translator.call(that, el, key) : that._translator.token.call(that, el, key),
-                    content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
-                    index:j,
-                    abstract: abstract
-                  }
-                );
-                return tokenBehaviour.content;
-              }).join(' + '),
-              token: abstract.token[index],
-              index: index,
-              abstract: abstract
-            }
-          );
-          return memo + blockBehaviour.content;
+        if(!abstract.content[0]) return key;
+
+        return _.reduce(abstract.content, function(contentString, content, index){        
+
+          lkey = abstract.token[index].length? abstract.token[index].atm('lkey') : false;
+
+          blockBehaviour = {
+            content: _.map(content, function(el,j){
+              tokenBehaviour = {
+                content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
+                index:j,
+                abstract: abstract
+              };
+
+              if(lkey)
+                that.trigger('generate:token:' + lkey, tokenBehaviour);
+
+              return tokenBehaviour.content;
+
+            }).join(' + '),
+            token: abstract.token[index],
+            index: index,
+            abstract: abstract
+          };
+
+          if(lkey)
+            that.trigger('generate:block:' + lkey, blockBehaviour );
+          
+          return contentString + blockBehaviour.content;
         },'');
         //return content;
       },
@@ -78,7 +85,7 @@ var Mask = (function(){
         if(nested) this.register(abstract);
 
         return "$.handle('" +
-          abstract.token[0].namespace + "'" +
+          abstract.token[0].cap('namespace') + "'" +
           (nested? ", '" + abstract.namespace + "'" : "") +
           ')';
       }

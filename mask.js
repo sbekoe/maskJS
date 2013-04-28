@@ -1,7 +1,6 @@
-/*! mask.js - v0.1.1 - 2013-04-21
+/*! mask.js - v0.1.1 - 2013-04-28
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
-
 (function (root, factory) {
 
   if (typeof exports === 'object') {

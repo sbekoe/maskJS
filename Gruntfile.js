@@ -3,7 +3,7 @@ module.exports = function(grunt) {
 
   // Project configuration.
   grunt.initConfig({
-    pkg: '<json:package.json>',
+    pkg: grunt.file.readJSON('package.json'),
 
     meta: {
       banner: '/*! <%= pkg.title || pkg.name %> - v<%= pkg.version %> - ' +
@@ -33,18 +33,25 @@ module.exports = function(grunt) {
       }
     },
 
-    lint: {
-      // files: ['src/**/*.core.js']
-      files: ['mask.js']
-    },
+    // lint: {
+    //   // files: ['src/**/*.core.js']
+    //   files: ['mask.js']
+    // },
 
     qunit: {
-      files: ['test/**/*.html']
+      dist: ['test/**/*.html']
     },
 
     concat: {
+      options:{
+        banner: '/*! <%= pkg.title || pkg.name %> - v<%= pkg.version %> - ' +
+        '<%= grunt.template.today("yyyy-mm-dd") %>\n' +
+        ' <%= pkg.homepage ? "* " + pkg.homepage + "\\n" : "" %>' +
+        ' * Copyright (c) <%= grunt.template.today("yyyy") %> <%= pkg.author.name %>;' +
+        ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n'
+      },
       dist:{
-        src: ['<banner:meta.banner>', '<file_strip_banner:src/<%= pkg.name %>.factory.js>'],
+        src: ['src/<%= pkg.name %>.factory.js'],
         dest: '<%= pkg.name %>.js'
       }
     },
@@ -79,25 +86,45 @@ module.exports = function(grunt) {
 
         loopfunc: true,
         expr: true,
-        evil: true
+        evil: true,
+
+        globals: {
+          define: true,
+          require: true,
+          module: true,
+          exports: true,
+          console: true,
+          Exp: true,
+          Backbone: true
+        }
       },
-      
-      globals: {
-        define: true,
-        require: true,
-        module: true,
-        exports: true,
-        console: true,
-        Exp: true,
-        Backbone: true
-      }
+
+     dist: ['<% pkg.name %>.js'],
+     
     },
-    uglify: {}
+    uglify: {
+      options:{
+        report:'min'
+      },
+      dist: {
+        files: {
+          'mask.min.js': ['mask.js']
+        }
+      }
+    }
   });
-  grunt.loadNpmTasks('grunt-replace');
+ /* grunt.loadNpmTasks('grunt-replace');
   // Default task.
   // grunt.registerTask('default', 'lint qunit concat min replace');
   grunt.registerTask('default', 'concat replace lint qunit min');
   grunt.registerTask('travis', 'lint qunit');
+*/
+  grunt.loadNpmTasks('grunt-contrib-concat');
+  grunt.loadNpmTasks('grunt-contrib-jshint')
+  grunt.loadNpmTasks('grunt-replace');
+  grunt.loadNpmTasks('grunt-contrib-qunit');
+  grunt.loadNpmTasks('grunt-contrib-uglify');
 
+  grunt.registerTask('default', [/*'jshint:src',*/ 'concat', 'replace', 'jshint:dist', 'qunit', 'uglify:dist']);
+  grunt.registerTask('travis',  ['jshint:dist', 'qunit:dist']);
 };

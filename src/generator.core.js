@@ -3,10 +3,12 @@ var Generator = (function(){
 
     // produces a js string from a js template and and an abstract holding additional info
     generate: function(template, asbstract){
-      var tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
+      var
+        tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
         tokens = tpl.tokens.slice(0),
         trl = this._translator,
         key, key2, result;
+
       asbstract = asbstract || this.asbtract || {};
 
       // for each key in the template, check case sensitive and with lower case:
@@ -16,9 +18,12 @@ var Generator = (function(){
       for(var i in tpl.key){
         key = tpl.key[i];
         key2 = key.toLowerCase();
-        tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
-          trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
-            asbstract[key] || asbstract[key2] || key;
+        // tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
+        //   trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
+        //     asbstract[key] || asbstract[key2] || key;
+        tokens[i] = (trl[key] && trl[key].call(this, asbstract, key)) || 
+                    (trl[key2] && trl[key2].call(this, asbstract, key)) ||
+                    asbstract[key] || asbstract[key2] || key;
       }
 
       return tokens.join('');

@@ -10,7 +10,7 @@ test('compile()', function(){
     ],
 
     logic: [
-      { lkey:'if', exp: '(#param:if|elseif|else|endif)%s(#param:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))', priority: 5 },
+      { lkey:'if', exp: '(#param:if|elseif|else|endif)%s(#param,namespace:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))', priority: 5 },
       { lkey:'with', exp: 'with (#param:%path)', priority: 4 }
     ],
 
@@ -46,6 +46,9 @@ test('compile()', function(){
         var
           param = e.token.cap('param');
         if(param === 'if' || param === 'elseif') return '($.getData("'+'")' + + ')'
+        e.contents = _.map(e.contents, function(content, index){
+          
+        },this)
       },
 
       // api tests
@@ -67,7 +70,7 @@ test('compile()', function(){
   ok(contentExists && content[0][0].content.length === 2);
   ok(contentExists && content[0][0].token.length === 3);
 
-  //mask.register(template);
+  // mask.register(template);
 });
 //*/
 

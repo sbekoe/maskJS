@@ -48,12 +48,12 @@ var Mask = (function(){
 
         if(!abstract.content[0]) return key;
 
-        return _.reduce(abstract.content, function(contentString, content, index){        
+        lkey = abstract.token[0].length && abstract.token[0].atm('lkey');
 
-          lkey = abstract.token[index].length? abstract.token[index].atm('lkey') : false;
+        blockBehaviour = {
+          contents: _.map(abstract.content, function(content, index){        
 
-          blockBehaviour = {
-            content: _.map(content, function(el,j){
+            return _.map(content, function(el,j){
               tokenBehaviour = {
                 content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
                 index:j,
@@ -65,18 +65,16 @@ var Mask = (function(){
 
               return tokenBehaviour.content;
 
-            }).join(' + '),
-            token: abstract.token[index],
-            index: index,
-            abstract: abstract
-          };
-
-          if(lkey)
-            that.trigger('generate:block:' + lkey, blockBehaviour );
+            }).join(' + ');
           
-          return contentString + blockBehaviour.content;
-        },'');
-        //return content;
+          },this),
+          abstract: abstract
+        };
+
+        if(lkey)
+            that.trigger('generate:block:' + lkey, blockBehaviour );
+
+        return blockBehaviour.contents.join('');
       },
 
       token: function(abstract, key){

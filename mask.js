@@ -1,4 +1,4 @@
-/*! mask.js - v0.2.0 - 2013-04-29
+/*! mask.js - v0.2.0 - 2013-04-30
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
 (function (root, factory) {
@@ -282,10 +282,12 @@ var
 
     // produces a js string from a js template and and an abstract holding additional info
     generate: function(template, asbstract){
-      var tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
+      var
+        tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
         tokens = tpl.tokens.slice(0),
         trl = this._translator,
         key, key2, result;
+
       asbstract = asbstract || this.asbtract || {};
 
       // for each key in the template, check case sensitive and with lower case:
@@ -295,9 +297,12 @@ var
       for(var i in tpl.key){
         key = tpl.key[i];
         key2 = key.toLowerCase();
-        tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
-          trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
-            asbstract[key] || asbstract[key2] || key;
+        // tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
+        //   trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
+        //     asbstract[key] || asbstract[key2] || key;
+        tokens[i] = (trl[key] && trl[key].call(this, asbstract, key)) || 
+                    (trl[key2] && trl[key2].call(this, asbstract, key)) ||
+                    asbstract[key] || asbstract[key2] || key;
       }
 
       return tokens.join('');
@@ -529,12 +534,12 @@ var
 
         if(!abstract.content[0]) return key;
 
-        return _.reduce(abstract.content, function(contentString, content, index){        
+        lkey = abstract.token[0].length && abstract.token[0].atm('lkey');
 
-          lkey = abstract.token[index].length? abstract.token[index].atm('lkey') : false;
+        blockBehaviour = {
+          contents: _.map(abstract.content, function(content, index){        
 
-          blockBehaviour = {
-            content: _.map(content, function(el,j){
+            return _.map(content, function(el,j){
               tokenBehaviour = {
                 content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
                 index:j,
@@ -546,18 +551,16 @@ var
 
               return tokenBehaviour.content;
 
-            }).join(' + '),
-            token: abstract.token[index],
-            index: index,
-            abstract: abstract
-          };
-
-          if(lkey)
-            that.trigger('generate:block:' + lkey, blockBehaviour );
+            }).join(' + ');
           
-          return contentString + blockBehaviour.content;
-        },'');
-        //return content;
+          },this),
+          abstract: abstract
+        };
+
+        if(lkey)
+            that.trigger('generate:block:' + lkey, blockBehaviour );
+
+        return blockBehaviour.contents.join('');
       },
 
       token: function(abstract, key){

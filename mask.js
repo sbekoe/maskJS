@@ -1,4 +1,4 @@
-/*! mask.js - v0.2.0 - 2013-04-30
+/*! mask.js - v0.2.0 - 2013-05-02
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
 (function (root, factory) {
@@ -26,6 +26,13 @@ var
 
   root = this,
   prevMask = this.Mask;
+
+// API strings
+var
+  LCAP = 'logic',
+  LKEY = 'lkey', // logic key
+  SKEY = 'skey'; // syntax key
+
 
   var Compiler = (function(){
 
@@ -103,9 +110,11 @@ var
               uniqueLBound = -1 === _.indexOf(lb, l),
               uniqueRBound = -1 === _.indexOf(rb, r);
 
-
-            error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + s.skey);
-            log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + s.skey);
+            if(!part)
+              console.error('Compiler: Invalid syntax definition in part %d of rule %s', i, s.skey);
+            
+            if(!uniqueLBound || !uniqueRBound)
+              console.warn('Compiler: non-unique part %d in syntax definition %s %o', i, s.skey, s);
 
             s['behaviour'][i] = {
               part: i,
@@ -164,7 +173,7 @@ var
     parse: function(s,a){
       var
         that = this,
-        abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[[]]},
+        abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[]},
         stream = s || this.stream,
         child,
         nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
@@ -283,29 +292,33 @@ var
     // produces a js string from a js template and and an abstract holding additional info
     generate: function(template, asbstract){
       var
-        tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
+        tpl = this._template[template || this.option.template] || console.error('Generator: The template' + template + 'do not exist.'),
         tokens = tpl.tokens.slice(0),
         trl = this._translator,
         key, key2, result;
 
       asbstract = asbstract || this.asbtract || {};
 
-      // for each key in the template, check case sensitive and with lower case:
-      // - call a translator,
-      // - directly use an abstract attribute
-      // - or reinsert the key
-      for(var i in tpl.key){
-        key = tpl.key[i];
-        key2 = key.toLowerCase();
-        // tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
-        //   trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
-        //     asbstract[key] || asbstract[key2] || key;
-        tokens[i] = (trl[key] && trl[key].call(this, asbstract, key)) || 
-                    (trl[key2] && trl[key2].call(this, asbstract, key)) ||
-                    asbstract[key] || asbstract[key2] || key;
-      }
+      
+      for(var i in tpl.key)
+        tokens[i] = this.translate(asbstract, tpl.key[i]);
 
       return tokens.join('');
+    },
+
+
+    // call a translator,
+    // directly use an abstract attribute
+    // or reinsert the key
+    translate: function(abstract, key){
+      var
+        _key = key.toLowerCase(),
+        trl = this._translator[key] || this._translator[_key];
+
+      return (trl && trl.call(this, abstract, key)) ||
+        abstract[key] ||
+        abstract[_key] ||
+        key;
     },
 
     // Hold an api for adding new templates
@@ -313,7 +326,8 @@ var
       var match, keys, tpl = {tokens:[], key:{}}, prevIndex = 0, offset;
       this._template || (this._template = {});
 
-      log(!!this._template[key], '(generator) Overwrite template "' + key + '"');
+      if(!!this._template[key])
+        console.warn('Generator: Overwrite template "%s"', key);
 
       switch(typeof template){
         case 'function':
@@ -356,7 +370,8 @@ var
 
     // Hold an api for adding new translator functions
     addTranslator: function(fct, key){
-      log(!!this._translator[key], '(generator) Overwrite translator "' + key + '"');
+      if(!!this._translator[key])
+        console.warn('Generator: Overwrite translator "%s"', key);
       this._translator[key] = fct;
 
       return this;
@@ -444,12 +459,12 @@ var
       return '';
     },
 
-    handle: function(path, viewPath){
-      var data = this.getData(path);
+    handle: function(dataPath, viewPath){
+      var data = this.getData(dataPath);
       switch(typeof data){
         case 'string':
         case 'number': return data;
-        case 'boolean': return data? PATH_ATTR.exec(path)[1] : '';
+        case 'boolean': return data? PATH_ATTR.exec(dataPath)[1] : '';
         case 'object': return this.nest(data, viewPath);
         default: return '';
       }
@@ -528,50 +543,63 @@ var
       content: function(abstract, key){
         var
           that = this,
-          blockBehaviour,
-          tokenBehaviour,
-          lkey;
+          blockEvent,
+          contentEvent,
+          lkey,
+          length = abstract.content.length;
 
         if(!abstract.content[0]) return key;
 
-        lkey = abstract.token[0].length && abstract.token[0].atm('lkey');
+        blockEvent = {
+          contents: _.map(abstract.content, function(content, index){
+            var token = abstract.token[index];
 
-        blockBehaviour = {
-          contents: _.map(abstract.content, function(content, index){        
+            contentEvent = {
+              content:
+                _.map(content, function(token,j){
+                  return typeof token === 'string'? Generator.stringify(token) : that.translate(token, 'token'); //that._translator.token.call(that, token, key);
+                }).join(' + '),
+              token: token,
+              abstract: abstract,
+              index: index,
 
-            return _.map(content, function(el,j){
-              tokenBehaviour = {
-                content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
-                index:j,
-                abstract: abstract
-              };
+              first: index === 0,
+              last: index === length - 1
+            };
 
-              if(lkey)
-                that.trigger('generate:token:' + lkey, tokenBehaviour);
+            // trigger default content event
+            that.trigger('generate:content', contentEvent);
 
-              return tokenBehaviour.content;
+            // trigger event for each logic of this token
+            token && token.cap(LCAP).each(function(submatch){
+              that.trigger('generate:logic:' + submatch.atm(LKEY), contentEvent);
+            });
 
-            }).join(' + ');
+            return  contentEvent.content;
           
           },this),
           abstract: abstract
         };
 
-        if(lkey)
-            that.trigger('generate:block:' + lkey, blockBehaviour );
+        that.trigger('generate:block', blockEvent);
 
-        return blockBehaviour.contents.join('');
+        // return blockEvent.contents.join('');
+        return chain(blockEvent.contents)
+          .flatten()
+          .join('')
+          .value();
       },
 
       token: function(abstract, key){
-        var nested = !!abstract.content.length;
+        var
+          nested = abstract.viewPath || (abstract.content && abstract.namespace && abstract.content.length),
+          dataPath = abstract.dataPath || abstract.token[0].cap('namespace'),
+          viewPath = abstract.viewPath || (nested && abstract.namespace);
 
-        if(nested) this.register(abstract);
+        if(nested)
+          this.register(abstract);
 
-        return "$.handle('" +
-          abstract.token[0].cap('namespace') + "'" +
-          (nested? ", '" + abstract.namespace + "'" : "") +
-          ')';
+        return "$.handle('" + dataPath + "'" + (viewPath? ", '" + viewPath + "'" : "") + ')';
       }
     },
     debug: true
@@ -579,7 +607,8 @@ var
 
   _.extend(Mask, {
     create: function(namespace, options){
-      error(!_.isFunction(this.v[namespace]), 'The view class  >>' + namespace + '<< doesn\'t exist');
+      if(!_.isFunction(this.v[namespace]))
+        console.error('The view class  >>' + namespace + '<< doesn\'t exist');
 
       return new this.v[namespace](options);
     },
@@ -638,6 +667,62 @@ var
 
   return Mask;
 })();
+
+  var Console = (function(console){
+    if(Console)
+      return Console;
+
+    var
+      Console = function(options){
+        var o = options || {};
+        this.quiet = !!o.quiet;
+      },
+      node = !window,
+      phantom = navigator && /phantom/i.test(navigator.userAgent),
+      msg_prefix = {
+        warn: 'Warning: ',
+        log: '',
+        error: 'Error: '
+      },
+      method,
+      placeholder = /%([sdo])/g;
+    Console.quiet = false;
+    Console.format = function(a){
+      var
+        args = [].slice.call(a),
+        stringFirst = typeof args[0] === 'string';
+      
+      if(node && stringFirst)
+        args[0] = args[0].replace(/%o/g,'%j');
+      
+      if((!console || phantom) && stringFirst && args.length > 1)
+        args[0] = args[0].replace(placeholder, function(m,p){
+          if(!args[1]) return m;
+          var a = args.splice(1,1)[0];
+          switch(p){
+            case 's': return '' + a;
+            case 'd': return parseInt(a);
+            case 'f': return parseFloat(a);
+            default: return JSON && JSON.stringify(a) || '' + a;
+          }
+        });
+      return args;
+    };
+
+    Console.prototype.put = function(msg){
+      window.setTimeout(function(){ throw msg; }, 1);
+      c.log('test');
+    };
+
+    for(method in msg_prefix)(function(method, prefix){
+      Console[method] = Console.prototype[method] = function(){
+        var args = Console.format(arguments);          
+        return !this.quiet && (console && console[method] && !console[method].apply(console, args) || this.put(prefix + args.join()));
+      };
+    })(method, msg_prefix[method].toUpperCase());
+
+    return Console;
+  })((window || global).console);
 
   // Helpers
 var 
@@ -724,14 +809,22 @@ var
     // on the server
     // TODO: put script to file here
   },
-
-  error = function(cond, msg){
-    if(cond === true) throw new Error('maskjs error: ' + msg);
-  },
-
-  log = function(cond, msg){
-    cond === true && console && console.log && console.log('maskjs log: ' + msg);
+  output = function(type, values){
+    var args = _.rest(arguments);
+    _.defer(function(){ throw type.toUpperCase() + values; });
+    console.log('test');
+    console.warn('foo %s', 'bar');
   };
+
+  var console = new Console({quiet:false});
+
+
+
+  // underscore helpers
+  var 
+    chain = _.chain;
+
+  var console = new Console({quiet:false});
 
   View.extend = extend;
 

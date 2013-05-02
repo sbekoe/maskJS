@@ -54,12 +54,12 @@ var View = (function(){
       return '';
     },
 
-    handle: function(path, viewPath){
-      var data = this.getData(path);
+    handle: function(dataPath, viewPath){
+      var data = this.getData(dataPath);
       switch(typeof data){
         case 'string':
         case 'number': return data;
-        case 'boolean': return data? PATH_ATTR.exec(path)[1] : '';
+        case 'boolean': return data? PATH_ATTR.exec(dataPath)[1] : '';
         case 'object': return this.nest(data, viewPath);
         default: return '';
       }

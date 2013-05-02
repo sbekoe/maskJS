@@ -4,29 +4,33 @@ var Generator = (function(){
     // produces a js string from a js template and and an abstract holding additional info
     generate: function(template, asbstract){
       var
-        tpl = this._template[template || this.option.template] || error(this.debug, '(generator) The template' + template + 'do not exist.'),
+        tpl = this._template[template || this.option.template] || console.error('Generator: The template' + template + 'do not exist.'),
         tokens = tpl.tokens.slice(0),
         trl = this._translator,
         key, key2, result;
 
       asbstract = asbstract || this.asbtract || {};
 
-      // for each key in the template, check case sensitive and with lower case:
-      // - call a translator,
-      // - directly use an abstract attribute
-      // - or reinsert the key
-      for(var i in tpl.key){
-        key = tpl.key[i];
-        key2 = key.toLowerCase();
-        // tokens[i] =   trl[key] && (result = trl[key].call(this, asbstract, key)) !== undefined? result :
-        //   trl[key2] && (result = trl[key2].call(this, asbstract, key)) !== undefined? result :
-        //     asbstract[key] || asbstract[key2] || key;
-        tokens[i] = (trl[key] && trl[key].call(this, asbstract, key)) || 
-                    (trl[key2] && trl[key2].call(this, asbstract, key)) ||
-                    asbstract[key] || asbstract[key2] || key;
-      }
+      
+      for(var i in tpl.key)
+        tokens[i] = this.translate(asbstract, tpl.key[i]);
 
       return tokens.join('');
+    },
+
+
+    // call a translator,
+    // directly use an abstract attribute
+    // or reinsert the key
+    translate: function(abstract, key){
+      var
+        _key = key.toLowerCase(),
+        trl = this._translator[key] || this._translator[_key];
+
+      return (trl && trl.call(this, abstract, key)) ||
+        abstract[key] ||
+        abstract[_key] ||
+        key;
     },
 
     // Hold an api for adding new templates
@@ -34,7 +38,8 @@ var Generator = (function(){
       var match, keys, tpl = {tokens:[], key:{}}, prevIndex = 0, offset;
       this._template || (this._template = {});
 
-      log(!!this._template[key], '(generator) Overwrite template "' + key + '"');
+      if(!!this._template[key])
+        console.warn('Generator: Overwrite template "%s"', key);
 
       switch(typeof template){
         case 'function':
@@ -77,7 +82,8 @@ var Generator = (function(){
 
     // Hold an api for adding new translator functions
     addTranslator: function(fct, key){
-      log(!!this._translator[key], '(generator) Overwrite translator "' + key + '"');
+      if(!!this._translator[key])
+        console.warn('Generator: Overwrite translator "%s"', key);
       this._translator[key] = fct;
 
       return this;

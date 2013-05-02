@@ -10,8 +10,8 @@ test('compile()', function(){
     ],
 
     logic: [
-      { lkey:'if', exp: '(#param:if|elseif|else|endif)%s(#param,namespace:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param:%path)|(#param:(#namespace:if))', priority: 5 },
-      { lkey:'with', exp: 'with (#param:%path)', priority: 4 }
+      { lkey:'if', exp: '(#param,command:if|elseif|else|endif)%s(#param,namespace,val1:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param,val2:%path)|(#param:(#namespace:if))', priority: 5 },
+      { lkey:'with', exp: 'with (#param,with:%path)', priority: 4 }
     ],
 
     templates:{
@@ -38,17 +38,35 @@ test('compile()', function(){
       },
 
 
-      'parse:logic:with':function(){
-        console.log(arguments)
+      'parse:logic:with': function(token, abstract, behaviour){
+        debugger;
+        abstract.dataPath = token.cap('with');
+        //console.log(arguments)
       },
 
-      'generate:block:if': function(e){
+      'generate:logic:if': function(e){
         var
-          param = e.token.cap('param');
-        if(param === 'if' || param === 'elseif') return '($.getData("'+'")' + + ')'
-        e.contents = _.map(e.contents, function(content, index){
-          
-        },this)
+          token = e.token,
+          command = token.cap('command'),
+          val1,
+          val2,
+          operand;
+
+        if (command === 'if' || command === 'elseif'){
+          val1 = this.translate({dataPath:token.cap('val1')}, 'token');
+          val2 = this.translate({dataPath:token.cap('val2')}, 'token');
+          operand = token.cap('op');
+          e.content = val1 + ' ' + operand + ' ' + val2 + '? ' + e.content + ' : ';
+        }
+
+
+        if (e.last && command !== 'else')
+          e.content += '""';
+        //if(param === 'if' || param === 'elseif') return '($.getData("'+'")' + + ')'
+       
+      },
+      'generate:logic:with': function(e){
+
       },
 
       // api tests
@@ -59,6 +77,7 @@ test('compile()', function(){
 
     cache:false
   });
+
   var template = '{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}';
   mask.compile(template)
   var content = mask.abstract.content,
@@ -70,7 +89,8 @@ test('compile()', function(){
   ok(contentExists && content[0][0].content.length === 2);
   ok(contentExists && content[0][0].token.length === 3);
 
-  // mask.register(template);
+  // debugger;
+  mask.register(template);
 });
 //*/
 

@@ -8,3 +8,9 @@ var
 
   root = this,
   prevMask = this.Mask;
+
+// API strings
+var
+  LCAP = 'logic',
+  LKEY = 'lkey', // logic key
+  SKEY = 'skey'; // syntax key

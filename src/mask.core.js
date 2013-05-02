@@ -42,50 +42,63 @@ var Mask = (function(){
       content: function(abstract, key){
         var
           that = this,
-          blockBehaviour,
-          tokenBehaviour,
-          lkey;
+          blockEvent,
+          contentEvent,
+          lkey,
+          length = abstract.content.length;
 
         if(!abstract.content[0]) return key;
 
-        lkey = abstract.token[0].length && abstract.token[0].atm('lkey');
+        blockEvent = {
+          contents: _.map(abstract.content, function(content, index){
+            var token = abstract.token[index];
 
-        blockBehaviour = {
-          contents: _.map(abstract.content, function(content, index){        
+            contentEvent = {
+              content:
+                _.map(content, function(token,j){
+                  return typeof token === 'string'? Generator.stringify(token) : that.translate(token, 'token'); //that._translator.token.call(that, token, key);
+                }).join(' + '),
+              token: token,
+              abstract: abstract,
+              index: index,
 
-            return _.map(content, function(el,j){
-              tokenBehaviour = {
-                content: typeof el === 'string'? Generator.stringify(el) : that._translator.token.call(that, el, key),
-                index:j,
-                abstract: abstract
-              };
+              first: index === 0,
+              last: index === length - 1
+            };
 
-              if(lkey)
-                that.trigger('generate:token:' + lkey, tokenBehaviour);
+            // trigger default content event
+            that.trigger('generate:content', contentEvent);
 
-              return tokenBehaviour.content;
+            // trigger event for each logic of this token
+            token && token.cap(LCAP).each(function(submatch){
+              that.trigger('generate:logic:' + submatch.atm(LKEY), contentEvent);
+            });
 
-            }).join(' + ');
+            return  contentEvent.content;
           
           },this),
           abstract: abstract
         };
 
-        if(lkey)
-            that.trigger('generate:block:' + lkey, blockBehaviour );
+        that.trigger('generate:block', blockEvent);
 
-        return blockBehaviour.contents.join('');
+        // return blockEvent.contents.join('');
+        return chain(blockEvent.contents)
+          .flatten()
+          .join('')
+          .value();
       },
 
       token: function(abstract, key){
-        var nested = !!abstract.content.length;
+        var
+          nested = abstract.viewPath || (abstract.content && abstract.namespace && abstract.content.length),
+          dataPath = abstract.dataPath || abstract.token[0].cap('namespace'),
+          viewPath = abstract.viewPath || (nested && abstract.namespace);
 
-        if(nested) this.register(abstract);
+        if(nested)
+          this.register(abstract);
 
-        return "$.handle('" +
-          abstract.token[0].cap('namespace') + "'" +
-          (nested? ", '" + abstract.namespace + "'" : "") +
-          ')';
+        return "$.handle('" + dataPath + "'" + (viewPath? ", '" + viewPath + "'" : "") + ')';
       }
     },
     debug: true
@@ -93,7 +106,8 @@ var Mask = (function(){
 
   _.extend(Mask, {
     create: function(namespace, options){
-      error(!_.isFunction(this.v[namespace]), 'The view class  >>' + namespace + '<< doesn\'t exist');
+      if(!_.isFunction(this.v[namespace]))
+        console.error('The view class  >>' + namespace + '<< doesn\'t exist');
 
       return new this.v[namespace](options);
     },

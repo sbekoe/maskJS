@@ -22,6 +22,7 @@ module.exports = function(grunt) {
             generator:'<%= grunt.file.read("src/generator.core.js") %>',
             view:'<%= grunt.file.read("src/view.core.js") %>',
             mask:'<%= grunt.file.read("src/mask.core.js") %>',
+            console:'<%= grunt.file.read("src/console.core.js") %>',
             constants:'<%= grunt.file.read("src/mask.constants.js") %>',
             helpers:'<%= grunt.file.read("src/mask.helpers.js") %>'
           }
@@ -51,7 +52,7 @@ module.exports = function(grunt) {
         ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n'
       },
       dist:{
-        src: ['src/<%= pkg.name %>.factory.js'],
+        src: ['src/factory.js'],
         dest: '<%= pkg.name %>.js'
       }
     },

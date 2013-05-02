@@ -83,11 +83,17 @@ var
     // on the server
     // TODO: put script to file here
   },
-
-  error = function(cond, msg){
-    if(cond === true) throw new Error('maskjs error: ' + msg);
-  },
-
-  log = function(cond, msg){
-    cond === true && console && console.log && console.log('maskjs log: ' + msg);
+  output = function(type, values){
+    var args = _.rest(arguments);
+    _.defer(function(){ throw type.toUpperCase() + values; });
+    console.log('test');
+    console.warn('foo %s', 'bar');
   };
+
+  var console = new Console({quiet:false});
+
+
+
+  // underscore helpers
+  var 
+    chain = _.chain;

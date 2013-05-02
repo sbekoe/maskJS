@@ -23,7 +23,11 @@
 
   @@mask
 
+  @@console
+
   @@helpers
+
+  var console = new Console({quiet:false});
 
   View.extend = extend;
 

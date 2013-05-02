@@ -74,9 +74,11 @@ var Compiler = (function(){
               uniqueLBound = -1 === _.indexOf(lb, l),
               uniqueRBound = -1 === _.indexOf(rb, r);
 
-
-            error(!part, '(compiler) Invalid syntax definition in part ' + i + ' of rule ' + s.skey);
-            log(!uniqueLBound || !uniqueRBound, '(compiler) Warning: non-unique part ' + i + ' in syntax definition ' + s.skey);
+            if(!part)
+              console.error('Compiler: Invalid syntax definition in part %d of rule %s', i, s.skey);
+            
+            if(!uniqueLBound || !uniqueRBound)
+              console.warn('Compiler: non-unique part %d in syntax definition %s %o', i, s.skey, s);
 
             s['behaviour'][i] = {
               part: i,
@@ -135,7 +137,7 @@ var Compiler = (function(){
     parse: function(s,a){
       var
         that = this,
-        abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[[]]},
+        abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[]},
         stream = s || this.stream,
         child,
         nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,

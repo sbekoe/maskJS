@@ -18,6 +18,7 @@ module.exports = function(grunt) {
         options: {
           variables: {
             version: '<%= pkg.version %>',
+            abstract:'<%= grunt.file.read("src/abstract.core.js") %>',
             compiler:'<%= grunt.file.read("src/compiler.core.js") %>',
             generator:'<%= grunt.file.read("src/generator.core.js") %>',
             view:'<%= grunt.file.read("src/view.core.js") %>',

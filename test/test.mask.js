@@ -11,7 +11,8 @@ test('compile()', function(){
 
     logic: [
       { lkey:'if', exp: '(#param,command:if|elseif|else|endif)%s(#param,namespace,val1:%path)%s(#op:==|!=|<|>|<=|>=)%s(#param,val2:%path)|(#param:(#namespace:if))', priority: 5 },
-      { lkey:'with', exp: 'with (#param,with:%path)', priority: 4 }
+      { lkey:'with', exp: 'with (#param,with:%path)', priority: 4 },
+      { lkey:'namespace', exp: 'as (#param,as:%path)', priority: 4 }
     ],
 
     templates:{
@@ -39,9 +40,11 @@ test('compile()', function(){
 
 
       'parse:logic:with': function(token, abstract, behaviour){
-        debugger;
+        abstract.namespace = token.cap('as');
+      },
+
+      'parse:logic:namespace': function(token, abstract, behaviour){
         abstract.dataPath = token.cap('with');
-        //console.log(arguments)
       },
 
       'generate:logic:if': function(e){
@@ -78,7 +81,7 @@ test('compile()', function(){
     cache:false
   });
 
-  var template = '{{if cond==1 with test}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}';
+  var template = '{{if cond==1 with test as main}} {{foo}} {{elseif cond==2}} {{bar}} {{/if}}';
   mask.compile(template)
   var content = mask.abstract.content,
     contentExists = content[0] && typeof content[0][0] === 'object';

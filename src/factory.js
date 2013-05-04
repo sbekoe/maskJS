@@ -12,8 +12,9 @@
 
 }(this, function (_, Backbone) {
 
-
   @@constants
+
+  @@abstract
 
   @@compiler
 
@@ -30,6 +31,8 @@
   var console = new Console({quiet:false});
 
   View.extend = extend;
+
+  Mask.Abstract = Abstract;
 
   Mask.View = View;
 

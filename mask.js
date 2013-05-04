@@ -1,4 +1,4 @@
-/*! mask.js - v0.2.0 - 2013-05-02
+/*! mask.js - v0.2.0 - 2013-05-04
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
 (function (root, factory) {
@@ -14,7 +14,6 @@
   }
 
 }(this, function (_, Backbone) {
-
 
   // global constants
 var
@@ -33,6 +32,56 @@ var
   LKEY = 'lkey', // logic key
   SKEY = 'skey'; // syntax key
 
+
+  var Abstract = (function(){
+  var Abstract = function(data) {
+    if(data instanceof Abstract)
+      return data;
+    if(!(this instanceof Abstract))
+      return new Abstract(data);
+
+    this.set = function(attr, val, silent){
+      set(this, data, attr, val, silent);
+      return this;
+    };
+
+    this.get = function(attr){
+      return data[attr];
+    };
+  };
+
+  
+    // set: function(hashmap, [,silent]){
+    // set: function(attr, val [,silent]){
+  var set = function(abstract, data, attr, val, silent){
+    var oldVal, changes = {}, c, a;
+    
+    if(typeof attr !== 'string'){
+      for(a in attr)
+        if(c = set(abstract, data, a, attr[a], val))
+          changes[attr] = c[0];
+      
+      if(_.size(changes) !== 0)
+        abstract.trigger('change', changes);
+    }
+
+    oldVal = data[attr];
+
+    if(oldVal === val) return null;
+
+    data[attr] = val;
+
+    if(!silent && oldVal !== undefined)
+      console.warn('Abstract: override attribute "%s" = %o with %o while %s', attr, oldVal, val, data.status || 'setting');
+
+    abstract.trigger('set change:' + attr, val, oldVal, attr);
+
+    return [oldVal];
+  };
+
+  _.extend(Abstract.prototype, Backbone.Events);
+  return Abstract;
+})();
 
   var Compiler = (function(){
 
@@ -256,7 +305,7 @@ var
               child.token.splice(0, 0, token);
 
               nested = stream.slice(nextToken.lastIndex, ohash.index);
-              child.namespace = abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
+              child.namespace = child.namespace || abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
               nextToken.lastIndex = ohash.index + ohash[0].length;
 
               if(nested !== ''){
@@ -827,6 +876,8 @@ var
   var console = new Console({quiet:false});
 
   View.extend = extend;
+
+  Mask.Abstract = Abstract;
 
   Mask.View = View;
 

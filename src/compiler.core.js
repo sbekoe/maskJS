@@ -220,7 +220,7 @@ var Compiler = (function(){
               child.token.splice(0, 0, token);
 
               nested = stream.slice(nextToken.lastIndex, ohash.index);
-              child.namespace = abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
+              child.namespace = child.namespace || abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
               nextToken.lastIndex = ohash.index + ohash[0].length;
 
               if(nested !== ''){

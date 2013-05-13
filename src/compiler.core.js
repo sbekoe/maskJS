@@ -148,14 +148,15 @@ var Compiler = (function(){
     parse: function(ast){
       ast
         .defaultNamespace('root')
+        .reverse()
         .newContent()
         .addState('parseContent');
         // .set({content: [], token: [] })
       var
         _this = this,
-        abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[]},
+        // abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[]},
         // stream = s || this.stream,
-        stream = abstract.get('stream', true),
+        stream = ast.get('stream', true),
         child,
         nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
         nextIndexedOpener,
@@ -163,7 +164,7 @@ var Compiler = (function(){
         hash, // hash of a token
         ohash, // hash of an opener token
         nested,
-        behaviour = {},
+        // behaviour = {},
         token;
 
       while(hash = nextToken.exec(stream)){
@@ -186,17 +187,14 @@ var Compiler = (function(){
           };
           */
 
-          this.trigger('parse:syntax:' + token.atm('skey'),
-            chlid,
-            token
-            //,behaviour
-          );
+          this.trigger('parse:syntax:' + token.atm('skey'), chlid, token );
 
           // if(token.cap('logic')) _.each(token.cap(['logic']), function(l){
-          if(token.cap('logic')) token.cap('logic').each( function(logicToken){
-            // this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
-            _this.trigger('parse:logic:' + logicToken.atm('lkey'), child, token, logicToken);
-          });
+          if(token.cap('logic')) token
+            .cap('logic')
+            .each( function(logicToken){
+              _this.trigger('parse:logic:' + logicToken.atm('lkey'), child, token, logicToken);
+            });
         }
 
         // if(!behaviour.valid && hash[1] !== 'text') continue;

@@ -11,10 +11,13 @@
   }
 
 }(this, function (_, Backbone) {
+  var Events = Backbone.Events;
 
   @@constants
 
   @@abstract
+
+  @@ast
 
   @@compiler
 
@@ -30,13 +33,17 @@
 
   var console = new Console({quiet:false});
 
-  View.extend = extend;
-
   Mask.Abstract = Abstract;
 
-  Mask.View = View;
+  Mask.AST = AST;
+
+  Mask.Compiler;
 
   Mask.Generator = Generator;
+
+  View.extend = extend;
+
+  Mask.View = View;
 
   Mask.VERSION = '@@version';
 

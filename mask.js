@@ -1,4 +1,4 @@
-/*! mask.js - v0.2.0 - 2013-05-04
+/*! mask.js - v0.2.0 - 2013-05-05
  * https://github.com/sbekoe/maskjs
  * Copyright (c) 2013 Simon Bekoe; Licensed MIT */
 (function (root, factory) {
@@ -34,25 +34,49 @@ var
 
 
   var Abstract = (function(){
-  var Abstract = function(data) {
+  var Abstract = function(data, pub) {
     if(data instanceof Abstract)
       return data;
+    
     if(!(this instanceof Abstract))
-      return new Abstract(data);
+      return new Abstract(data, pub);
 
-    this.set = function(attr, val, silent){
-      set(this, data, attr, val, silent);
-      return this;
-    };
+    this.data = pub? data : {};
 
-    this.get = function(attr){
-      return data[attr];
-    };
+    this.enclose(data);
   };
 
+
+  _.extend(Abstract.prototype, Backbone.Events, {
+    extend: function(){
+      _.extend.apply(null,[this].concat(_.toArray(arguments)));
+      return this;
+    },
+    enclose: function(data){
+      this.set = function(attr, val, silent){
+        set(this, data, attr, val, silent);
+        return this;
+      };
+
+      this.get = function(attr){
+        return data[attr];
+      };
+
+      this.defaults = function(){
+        _.defaults.apply(null,[data].concat(_.toArray(arguments)));
+        return this;
+      };
+
+      this.toJSON = function(){
+        return JSON.strigify(data);
+      };
+    }
+  });
+
+
   
-    // set: function(hashmap, [,silent]){
-    // set: function(attr, val [,silent]){
+  // set: function(hashmap, [,silent]){
+  // set: function(attr, val [,silent]){
   var set = function(abstract, data, attr, val, silent){
     var oldVal, changes = {}, c, a;
     
@@ -79,7 +103,6 @@ var
     return [oldVal];
   };
 
-  _.extend(Abstract.prototype, Backbone.Events);
   return Abstract;
 })();
 
@@ -195,28 +218,28 @@ var
       return new Exp(lexer);
     },
 
+    // Lexical analysis (scanner)
     scan: function(source){
       var
         src = source || this.source,
-        tokens = [],
-        stream,
-        text;
+        index = this.lexer.parse(src),
+        stream = index
+          .map(function(token, i){
+              if(typeof token === 'string') return 'text ' + i;
+              else return token.atm('type') + ' ' + i + (' ' + (token.atm('skey') || '')) + (' ' + (token.cap(['param']).join(' ') || ''));
+            })  
+          .reverse()
+          .join('\n');
 
-      // Lexical analysis (scanner)
-      stream = this.lexer.scan(src, function(match, stream){
-        if(text = src.slice(match.lastRange[1], match.range[0])){
-          stream.push('text ' + (tokens.push(text)-1));
-        }
-        // return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.skey || '')) + (' ' + (match.param.join(' ') || ''));
-        return match.atm('type') + ' ' + (tokens.push(match) - 1) + (' ' + (match.atm('skey') || '')) + (' ' + (match.cap(['param']).join(' ') || ''));
-       // return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
+      this.stream = stream;
+
+      return index.value();
+      
+      return Abstract({
+        source: source,
+        index: index,
+        stream: stream
       });
-
-      if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
-
-      this.stream = stream.reverse().join('\n');
-
-      return tokens;
     },
 
     parse: function(s,a){

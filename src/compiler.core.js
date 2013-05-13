@@ -6,20 +6,27 @@ var Compiler = (function(){
   // - scanning for all tokens in the template
   // - constructing the tree backwards (looking for block closers first and for matching openers then)
   var Compiler =  {
-    compile: function(source, options){
+    // compile: function(source, options){
+    compile: function(abstract){
       // enable use by prototype extension and standalone
       this.source = source || this.source || '';
       this.options = options || this.options || {};
+
+      // var abstract = Abstract(abstract);
+      var ast = new AST(abstract);
 
       // define() is kind of a scanner generator lexer = scanner
       this.lexer = this.define();
 
       // lexical analyse: produces also tokens 'stream' which is used in the parser
-      this.tokens = this.scan();
+      // this.tokens = this.scan();
+      // this.scan(abstract);
+      this.scan(ast);
 
       // syntactic analyse: build abstract syntax tree
-      this.abstract = this.parse();
-
+      // this.abstract = this.parse();
+      // return this.parse(abstract);
+      return this.parse(ast);
       return this.abstract;
     },
 
@@ -110,35 +117,45 @@ var Compiler = (function(){
       return new Exp(lexer);
     },
 
-    scan: function(source){
+    // Lexical analysis (scanner)
+    // scan: function(source){
+    scan: function(ast){
       var
-        src = source || this.source,
-        tokens = [],
-        stream,
-        text;
+        // src = source || this.source,
+        src = abstract.get('source'),
+        index = this.lexer.parse(src),
+        stream = index
+          .map(function(token, i){
+              if(typeof token === 'string') return 'text ' + i;
+              else return token.atm('type') + ' ' + i + (' ' + (token.atm('skey') || '')) + (' ' + (token.cap(['param']).join(' ') || ''));
+            })  
+          .reverse()
+          .join('\n');
 
-      // Lexical analysis (scanner)
-      stream = this.lexer.scan(src, function(match, stream){
-        if(text = src.slice(match.lastRange[1], match.range[0])){
-          stream.push('text ' + (tokens.push(text)-1));
-        }
-        // return match.type + ' ' + (tokens.push(match) - 1) + (' ' + (match.skey || '')) + (' ' + (match.param.join(' ') || ''));
-        return match.atm('type') + ' ' + (tokens.push(match) - 1) + (' ' + (match.atm('skey') || '')) + (' ' + (match.cap(['param']).join(' ') || ''));
-       // return (match['opener']? 'opener ' : 'closer ') + (tokens.push(match)-1) + (' ' + (match.pattern || '')) + (' ' + (match.param.join(' ') || ''));
+      // this.stream = stream;
+
+      // return index.value();
+      
+      ast.set({
+        index: index,
+        stream: stream
       });
 
-      if(this.lexer.lastMatch) stream.push('text ' + (tokens.push(src.slice(this.lexer.lastMatch.range[1]))-1));
-
-      this.stream = stream.reverse().join('\n');
-
-      return tokens;
+      return this;
     },
 
-    parse: function(s,a){
+    // parse: function(s,a){
+    parse: function(ast){
+      ast
+        .defaultNamespace('root')
+        .newContent()
+        .addState('parseContent');
+        // .set({content: [], token: [] })
       var
-        that = this,
+        _this = this,
         abstract = a || {namespace: this.namespace || 'root', content:[[]], token:[]},
-        stream = s || this.stream,
+        // stream = s || this.stream,
+        stream = abstract.get('stream', true),
         child,
         nextToken = /^(text|closer|opener) (\d+)(?: (\w+))?(?: (\w+))?.*$/gm,
         nextIndexedOpener,
@@ -152,41 +169,49 @@ var Compiler = (function(){
       while(hash = nextToken.exec(stream)){
         token = this.tokens[hash[2]];
         // if(this.trigger){
-        if(this.trigger && hash[1] !== 'text'){
+        if(hash[1] !== 'text'){
+          child = AST({
+            namespace: token.cap('namespace') || token.cap('param'),
+            // content: [],
+            // token: [],
+            type: hash[1],
+            status: 'parsing'
+          });
+          /*
+          behaviour = {
+            complete: true,
+            valid: true,
+            namespace: token.cap('namespace') || token.cap('param') || ''
+            // namespace: token.cap('namespace')? token.cap('namespace')[0] : token.cap('param')? token.cap('param')[0] : ''
+          };
+          */
+
           this.trigger('parse:syntax:' + token.atm('skey'),
-            token,
-            child = {
-              namespace:'',
-              content:[],
-              token: []
-            },
-            behaviour = {
-              complete:true,
-              valid:true,
-              namespace: token.cap('namespace') || token.cap('param') || ''
-              // namespace: token.cap('namespace')? token.cap('namespace')[0] : token.cap('param')? token.cap('param')[0] : ''
-            }
+            chlid,
+            token
+            //,behaviour
           );
 
           // if(token.cap('logic')) _.each(token.cap(['logic']), function(l){
-          if(token.cap('logic')) token.cap('logic').each( function(l){
-            this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
-          }, this);
+          if(token.cap('logic')) token.cap('logic').each( function(logicToken){
+            // this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
+            _this.trigger('parse:logic:' + logicToken.atm('lkey'), child, token, logicToken);
+          });
         }
 
-        if(!behaviour.valid && hash[1] !== 'text')
-          continue;
+        // if(!behaviour.valid && hash[1] !== 'text') continue;
+        if(child.isValid()) continue;
 
-        
-
-        behaviour = {};
+        // behaviour = {};
 
         switch(hash[1]){
           case 'text':
             child = this.tokens[hash[2]];
             break;
           case 'closer':
-            child.token.splice(0, 0, token);
+            child
+              .addToken(token)
+              .addState('parseMarker');
             //TODO: nextToken.mode('indexedOpener opener').update({wildcards:{type:hash[3], param:hash[4]})
             nextIndexedOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ') .*('+ hash[4] + ').*$$','gm'); // insert pattern and id/closer id
             nextOpener = new RegExp('^(opener) (\\d+) (' + hash[3] + ').*$$','gm'); // insert pattern
@@ -197,52 +222,65 @@ var Compiler = (function(){
               error(this.debug, '(Compiler) No opener found for the token: ' + hash[0]);
             //*/
 
-            while(!behaviour.complete && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
+            // while(!behaviour.complete && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
+            while(child.hasState('parseMarker') && (ohash = nextIndexedOpener.exec(stream) || nextOpener.exec(stream))){
               token = this.tokens[ohash[2]];
+              /*
+              behaviour = {
+                complete:true,
+                valid:true,
+                namespace: token.cap('namespace') || token.cap('param') || ''
+                // namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
+              };  
+              //*/
+              _this.trigger('parse:syntax:' + token.atm('skey'), child, token);
 
-              if(this.trigger){
-                this.trigger('parse:syntax:' + token.atm('skey'), token, child, behaviour = {
-                  complete:true,
-                  valid:true,
-                  namespace: token.cap('namespace') || token.cap('param') || ''
-                  // namespace: token.namespace? token.namespace[0] : token.param? token.param[0] : ''
-                });
-
-                token.cap('logic').each(function(l){
-                // _.each(token.cap('logic'), function(l){
-                  this.trigger('parse:logic:' + l.atm('lkey'), token, child, behaviour, l);
-                }, this);
-              }
+              token.cap('logic').each(function(l){
+                _this.trigger('parse:logic:' + l.atm('lkey'), child, token, l);
+              });
 
               nextIndexedOpener.lastIndex = nextOpener.lastIndex = ohash.index + ohash[0].length;
 
-              if(!behaviour.valid) continue;
-              child.token.splice(0, 0, token);
+              if(!child.isValid()) continue;
 
-              nested = stream.slice(nextToken.lastIndex, ohash.index);
-              child.namespace = child.namespace || abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
+              // child.token.splice(0, 0, token);
+              child
+                .prependToken(token)
+                .setStream(stream.slice(nextToken.lastIndex, ohash.index))
+                .defaultNamespace(token.cap('namespace') || token.cap('param'));
+
+              // nested = stream.slice(nextToken.lastIndex, ohash.index);
+              // child.namespace = child.namespace || abstract.namespace + NAMESPACE_DELIMITER + behaviour.namespace;
               nextToken.lastIndex = ohash.index + ohash[0].length;
 
-              if(nested !== ''){
-                child.content.splice(0, 0, []);
-                this.parse(nested, child);
+              // if(nested !== ''){
+              if(child.hasStream()){
+                // child.content.splice(0, 0, []);
+                // this.parse(nested, child);
+                // child.newContent();
+                this.parse(child);
               }
             }
 
 
             break;
           case 'opener':
-            child.token.splice(0, 0, token);
+            // child.token.splice(0, 0, token);
+            child.prependToken(token);
             break;
         }
 
-        abstract.content[0].push(child);
+        // ast.content[0].push(child);
+        ast.appendContent(child.removeState('parseMarker'));
 
       }
 
-      _.invoke(abstract.content,'reverse');
+      // _.invoke(ast.content,'reverse');
+      return ast
+        .forward()
+        .removeState('parseContent');
 
-      return abstract;
+      // return ast;
     }
 
 
